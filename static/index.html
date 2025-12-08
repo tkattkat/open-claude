@@ -193,20 +193,24 @@
     .home-attach-btn {
       width: 34px;
       height: 34px;
-      border-radius: 10px;
-      border: 1px solid rgba(0, 0, 0, 0.1);
-      background: rgba(255, 255, 255, 0.6);
+      border-radius: 50%;
+      border: none;
+      background: transparent;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
-      color: rgba(0, 0, 0, 0.6);
+      color: rgba(0, 0, 0, 0.4);
       transition: all 0.15s;
     }
 
     .home-attach-btn:hover {
-      background: rgba(0, 0, 0, 0.03);
-      color: rgba(0, 0, 0, 0.8);
+      background: rgba(0, 0, 0, 0.06);
+      color: rgba(0, 0, 0, 0.7);
+    }
+
+    .home-attach-btn:active {
+      transform: scale(0.95);
     }
 
     .model-selector {
@@ -1673,13 +1677,11 @@
         color: rgba(255, 255, 255, 0.8);
       }
       .home-attach-btn {
-        border-color: rgba(255, 255, 255, 0.15);
-        background: rgba(255, 255, 255, 0.06);
-        color: rgba(255, 255, 255, 0.75);
+        color: rgba(255, 255, 255, 0.5);
       }
       .home-attach-btn:hover {
         background: rgba(255, 255, 255, 0.1);
-        color: rgba(255, 255, 255, 0.95);
+        color: rgba(255, 255, 255, 0.8);
       }
       .home-send-btn { box-shadow: 0 2px 8px rgba(204, 120, 92, 0.4); }
       .home-signout {
