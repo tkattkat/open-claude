@@ -2,6 +2,18 @@ import { spawn, ChildProcess } from 'child_process';
 import { EventEmitter } from 'events';
 import type { MCPServerConfig } from '../types';
 
+// Sanitize args by stripping surrounding quotes
+function sanitizeArgs(args: string[]): string[] {
+  return args.map(arg => {
+    // Strip surrounding single or double quotes
+    if ((arg.startsWith('"') && arg.endsWith('"')) ||
+        (arg.startsWith("'") && arg.endsWith("'"))) {
+      return arg.slice(1, -1);
+    }
+    return arg;
+  });
+}
+
 // MCP Protocol Types
 interface MCPTool {
   name: string;
@@ -82,7 +94,10 @@ class MCPClient extends EventEmitter {
     try {
       // Spawn the MCP server process
       const env = { ...process.env, ...config.env };
-      const proc = spawn(config.command, config.args, {
+      const sanitizedArgs = sanitizeArgs(config.args || []);
+      console.log(`[MCP ${config.name}] Command: ${config.command}`);
+      console.log(`[MCP ${config.name}] Args: ${JSON.stringify(sanitizedArgs)}`);
+      const proc = spawn(config.command, sanitizedArgs, {
         env,
         stdio: ['pipe', 'pipe', 'pipe'],
         shell: process.platform === 'win32'
