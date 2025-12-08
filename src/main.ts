@@ -1,9 +1,9 @@
 import { app, BrowserWindow, ipcMain, session, globalShortcut, screen } from 'electron';
 import path from 'path';
 import crypto from 'crypto';
-import { isAuthenticated, getOrgId, makeRequest, streamCompletion, stopResponse, generateTitle, store, BASE_URL } from './api/client';
+import { isAuthenticated, getOrgId, makeRequest, streamCompletion, stopResponse, generateTitle, store, BASE_URL, prepareAttachmentPayload } from './api/client';
 import { createStreamState, processSSEChunk, type StreamCallbacks } from './streaming/parser';
-import type { SettingsSchema } from './types';
+import type { SettingsSchema, AttachmentPayload, UploadFilePayload } from './types';
 
 let mainWindow: BrowserWindow | null = null;
 let spotlightWindow: BrowserWindow | null = null;
@@ -426,14 +426,29 @@ ipcMain.handle('star-conversation', async (_event, convId: string, isStarred: bo
   return result.data;
 });
 
+// Upload file attachments (prepare metadata only)
+ipcMain.handle('upload-attachments', async (_event, files: UploadFilePayload[]) => {
+  const uploads: AttachmentPayload[] = [];
+  for (const file of files || []) {
+    const attachment = await prepareAttachmentPayload(file);
+    uploads.push(attachment);
+  }
+
+  return uploads;
+});
+
 // Send a message and stream response
-ipcMain.handle('send-message', async (_event, conversationId: string, message: string, parentMessageUuid: string) => {
+ipcMain.handle('send-message', async (_event, conversationId: string, message: string, parentMessageUuid: string, attachments: AttachmentPayload[] = []) => {
   const orgId = await getOrgId();
   if (!orgId) throw new Error('Not authenticated');
 
   console.log('[API] Sending message to conversation:', conversationId);
   console.log('[API] Parent message UUID:', parentMessageUuid);
   console.log('[API] Message:', message.substring(0, 50) + '...');
+  if (attachments?.length) {
+    console.log('[API] Attachments:', attachments.map(a => `${a.file_name} (${a.file_size})`).join(', '));
+    console.log('[API] File IDs:', attachments.map(a => a.document_id).join(', '));
+  }
 
   const state = createStreamState();
 
@@ -505,9 +520,12 @@ ipcMain.handle('send-message', async (_event, conversationId: string, message: s
     }
   };
 
+  // Send Claude the uploaded file UUIDs (metadata stays client-side for display)
+  const fileIds = attachments?.map(a => a.document_id).filter(Boolean) || [];
+
   await streamCompletion(orgId, conversationId, message, parentMessageUuid, (chunk) => {
     processSSEChunk(chunk, state, callbacks);
-  });
+  }, { attachments: [], files: fileIds });
 
   return { text: state.fullResponse, messageUuid: state.lastMessageUuid };
 });

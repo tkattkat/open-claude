@@ -11,8 +11,10 @@ contextBridge.exposeInMainWorld('claude', {
   renameConversation: (convId: string, name: string) => ipcRenderer.invoke('rename-conversation', convId, name),
   starConversation: (convId: string, isStarred: boolean) => ipcRenderer.invoke('star-conversation', convId, isStarred),
   generateTitle: (convId: string, messageContent: string, recentTitles?: string[]) => ipcRenderer.invoke('generate-title', convId, messageContent, recentTitles || []),
-  sendMessage: (conversationId: string, message: string, parentMessageUuid: string) =>
-    ipcRenderer.invoke('send-message', conversationId, message, parentMessageUuid),
+  sendMessage: (conversationId: string, message: string, parentMessageUuid: string, attachments?: unknown[]) =>
+    ipcRenderer.invoke('send-message', conversationId, message, parentMessageUuid, attachments || []),
+  uploadAttachments: (files: Array<{ name: string; size: number; type: string; data: ArrayBuffer | Uint8Array | number[] }>) =>
+    ipcRenderer.invoke('upload-attachments', files),
   stopResponse: (conversationId: string) => ipcRenderer.invoke('stop-response', conversationId),
 
   // Stream listeners

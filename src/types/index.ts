@@ -12,6 +12,23 @@ export interface StoreSchema {
   settings: SettingsSchema;
 }
 
+// File attachment payloads
+export interface AttachmentPayload {
+  document_id: string;
+  file_name: string;
+  file_size: number;
+  file_type: string;
+  file_url?: string;
+  extracted_content?: string;
+}
+
+export interface UploadFilePayload {
+  name: string;
+  size: number;
+  type: string;
+  data: ArrayBuffer | Buffer | Uint8Array | number[];
+}
+
 // Citation tracking (matches Claude's citation_start_delta/citation_end_delta)
 export interface Citation {
   uuid: string;

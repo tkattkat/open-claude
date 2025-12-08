@@ -167,11 +167,46 @@
       display: flex;
       justify-content: center;
       align-items: center;
+      gap: 8px;
       margin-top: 20px;
     }
 
     .home-send-btn {
-      display: none;
+      background: linear-gradient(145deg, #CC785C 0%, #D4846A 100%);
+      color: white;
+      border: none;
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 6px rgba(204, 120, 92, 0.25);
+      transition: all 0.15s;
+    }
+
+    .home-send-btn:hover { transform: scale(1.03); }
+    .home-send-btn:active { transform: scale(0.97); }
+
+    .home-attach-btn {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      border: 1px solid rgba(0, 0, 0, 0.1);
+      background: rgba(255, 255, 255, 0.6);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: rgba(0, 0, 0, 0.6);
+      transition: all 0.15s;
+    }
+
+    .home-attach-btn:hover {
+      background: rgba(0, 0, 0, 0.03);
+      color: rgba(0, 0, 0, 0.8);
     }
 
     .model-selector {
@@ -943,6 +978,73 @@
       transition: all 0.2s;
     }
 
+    .attach-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      border: 1px solid rgba(0, 0, 0, 0.1);
+      background: rgba(255, 255, 255, 0.75);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: rgba(0, 0, 0, 0.6);
+      transition: all 0.15s;
+    }
+
+    .attach-btn:hover { background: rgba(0, 0, 0, 0.04); color: rgba(0, 0, 0, 0.85); }
+    .attach-btn:active { transform: scale(0.97); }
+
+    .attachment-container {
+      display: none;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 8px;
+      padding: 0 4px;
+    }
+
+    .attachment-container.visible { display: flex; }
+
+    .attachment-list {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .attachment-pill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 12px;
+      background: rgba(0, 0, 0, 0.03);
+      border: 1px solid rgba(0, 0, 0, 0.07);
+    }
+
+    .attachment-icon { font-size: 14px; }
+
+    .attachment-meta { display: flex; flex-direction: column; gap: 2px; }
+    .attachment-name { font-size: 13px; font-weight: 600; color: rgba(0, 0, 0, 0.8); }
+    .attachment-size { font-size: 11px; color: rgba(0, 0, 0, 0.5); }
+
+    .attachment-remove {
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      color: rgba(0, 0, 0, 0.4);
+      font-size: 12px;
+      padding: 4px;
+      border-radius: 6px;
+    }
+    .attachment-remove:hover { background: rgba(0, 0, 0, 0.06); color: rgba(0, 0, 0, 0.7); }
+
+    .attachment-status {
+      font-size: 12px;
+      color: rgba(0, 0, 0, 0.55);
+      padding-left: 2px;
+    }
+    .attachment-status.error { color: #FF453A; }
+
     .input-wrapper:focus-within {
       border-color: rgba(204, 120, 92, 0.5);
       background: rgba(255, 255, 255, 0.85);
@@ -965,6 +1067,28 @@
 
     .input-area textarea::placeholder { color: rgba(0, 0, 0, 0.4); }
     .input-area textarea:focus { outline: none; }
+
+    .message-attachments {
+      margin-top: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .message-attachment-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      background: rgba(0, 0, 0, 0.03);
+      border-radius: 12px;
+      border: 1px solid rgba(0, 0, 0, 0.05);
+    }
+
+    .message-attachment-icon { font-size: 14px; }
+    .message-attachment-info { display: flex; flex-direction: column; gap: 2px; }
+    .message-attachment-name { font-size: 13px; font-weight: 600; color: rgba(0, 0, 0, 0.8); }
+    .message-attachment-size { font-size: 11px; color: rgba(0, 0, 0, 0.55); }
 
     .send-btn {
       background: linear-gradient(145deg, #CC785C 0%, #D4846A 100%);
@@ -1547,6 +1671,16 @@
         background: rgba(255, 255, 255, 0.08);
         color: rgba(255, 255, 255, 0.8);
       }
+      .home-attach-btn {
+        border-color: rgba(255, 255, 255, 0.15);
+        background: rgba(255, 255, 255, 0.06);
+        color: rgba(255, 255, 255, 0.75);
+      }
+      .home-attach-btn:hover {
+        background: rgba(255, 255, 255, 0.1);
+        color: rgba(255, 255, 255, 0.95);
+      }
+      .home-send-btn { box-shadow: 0 2px 8px rgba(204, 120, 92, 0.4); }
       .home-signout {
         color: rgba(255, 255, 255, 0.4);
       }
@@ -1649,6 +1783,27 @@
       .input-wrapper:focus-within { background: rgba(255, 255, 255, 0.12); }
       .input-area textarea { color: #fff; }
       .input-area textarea::placeholder { color: rgba(255, 255, 255, 0.4); }
+      .attach-btn {
+        border-color: rgba(255, 255, 255, 0.2);
+        background: rgba(255, 255, 255, 0.08);
+        color: rgba(255, 255, 255, 0.75);
+      }
+      .attach-btn:hover { background: rgba(255, 255, 255, 0.12); color: rgba(255, 255, 255, 0.95); }
+      .attachment-pill {
+        background: rgba(255, 255, 255, 0.08);
+        border-color: rgba(255, 255, 255, 0.12);
+      }
+      .attachment-name { color: rgba(255, 255, 255, 0.9); }
+      .attachment-size { color: rgba(255, 255, 255, 0.65); }
+      .attachment-remove { color: rgba(255, 255, 255, 0.6); }
+      .attachment-remove:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+      .attachment-status { color: rgba(255, 255, 255, 0.7); }
+      .message-attachment-row {
+        background: rgba(255, 255, 255, 0.08);
+        border-color: rgba(255, 255, 255, 0.12);
+      }
+      .message-attachment-name { color: rgba(255, 255, 255, 0.9); }
+      .message-attachment-size { color: rgba(255, 255, 255, 0.65); }
 
       .empty-state { color: rgba(255, 255, 255, 0.5); }
       .empty-state p { color: rgba(255, 255, 255, 0.7); }
@@ -1785,7 +1940,12 @@
               <button class="model-option" data-model="claude-sonnet-4-5-20250929">Sonnet</button>
               <button class="model-option" data-model="claude-haiku-4-5-20251001">Haiku</button>
             </div>
+            <button class="home-attach-btn" id="home-attach-btn" title="Attach files">📎</button>
             <button class="home-send-btn" id="home-send-btn">↑</button>
+          </div>
+          <div class="attachment-container" id="home-attachment-container">
+            <div class="attachment-list" id="home-attachment-list"></div>
+            <div class="attachment-status" id="home-attachment-status"></div>
           </div>
         </div>
       </div>
@@ -1820,11 +1980,18 @@
     <div class="input-area">
       <div class="input-wrapper">
         <textarea id="input" placeholder="Message Claude..." rows="1"></textarea>
+        <button class="attach-btn" id="attach-btn" title="Attach files">📎</button>
         <button class="send-btn" id="send-btn">↑</button>
         <button class="stop-btn" id="stop-btn">■</button>
       </div>
+      <div class="attachment-container" id="attachment-container">
+        <div class="attachment-list" id="attachment-list"></div>
+        <div class="attachment-status" id="attachment-status"></div>
+      </div>
     </div>
   </div>
+
+  <input type="file" id="file-input" multiple accept="*/*" style="display:none" />
 
   <script type="module" src="js/main.js"></script>
 </body>
