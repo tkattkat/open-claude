@@ -175,9 +175,9 @@ function createSettingsWindow() {
 			transparent: true,
 			vibrancy: "under-window",
 			visualEffectState: "active",
-			titleBarStyle: "hiddenInset",
 			trafficLightPosition: { x: 16, y: 16 },
 		}),
+		titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
 		backgroundColor: "#000000",
 		webPreferences: {
 			preload: path.join(__dirname, "preload.js"),
@@ -188,6 +188,9 @@ function createSettingsWindow() {
 
 	settingsWindow.loadFile(path.join(__dirname, "../static/settings.html"));
 
+	if (process.platform !== "darwin") {
+		settingsWindow.setMenuBarVisibility(false);
+	}
 	settingsWindow.on("closed", () => {
 		settingsWindow = null;
 	});
@@ -743,6 +746,7 @@ if (!gotTheLock) {
 
 const args = process.argv.slice(process.defaultApp ? 2 : 1);
 const spotlightMode = args.includes("--spotlight");
+const settingsMode = args.includes("--settings");
 
 let tray: Tray | null = null;
 
@@ -754,6 +758,16 @@ app.whenReady().then(() => {
 		// Quit when spotlight closes if launched in spotlight mode
 		if (spotlightWindow) {
 			spotlightWindow.on("closed", () => {
+				app.quit();
+			});
+		}
+		return;
+	} else if (settingsMode) {
+		createSettingsWindow();
+
+		// Quit when spotlight closes if launched in spotlight mode
+		if (settingsWindow) {
+			settingsWindow.on("closed", () => {
 				app.quit();
 			});
 		}
