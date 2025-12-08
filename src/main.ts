@@ -5,7 +5,7 @@ import { isAuthenticated, getOrgId, makeRequest, streamCompletion, stopResponse,
 import { createStreamState, processSSEChunk, type StreamCallbacks } from './streaming/parser';
 import type { SettingsSchema, AttachmentPayload, UploadFilePayload } from './types';
 
-let mainWindow: BrowserWindow | null = null;
+let mainWindows: BrowserWindow[] = [];
 let spotlightWindow: BrowserWindow | null = null;
 let settingsWindow: BrowserWindow | null = null;
 
@@ -94,8 +94,8 @@ function createSpotlightWindow() {
   });
 }
 
-function createMainWindow() {
-  mainWindow = new BrowserWindow({
+function createMainWindow(): BrowserWindow {
+  const newWindow = new BrowserWindow({
     width: 900,
     height: 700,
     transparent: true,
@@ -111,7 +111,26 @@ function createMainWindow() {
     trafficLightPosition: { x: 16, y: 16 },
   });
 
-  mainWindow.loadFile(path.join(__dirname, '../static/index.html'));
+  newWindow.loadFile(path.join(__dirname, '../static/index.html'));
+
+  // Remove from array when closed
+  newWindow.on('closed', () => {
+    mainWindows = mainWindows.filter(w => w !== newWindow);
+  });
+
+  mainWindows.push(newWindow);
+  return newWindow;
+}
+
+// Get the focused main window or the first one
+function getMainWindow(): BrowserWindow | null {
+  // Return the focused window if it's a main window
+  const focused = BrowserWindow.getFocusedWindow();
+  if (focused && mainWindows.includes(focused)) {
+    return focused;
+  }
+  // Return the first main window that's not destroyed
+  return mainWindows.find(w => !w.isDestroyed()) || null;
 }
 
 // Create settings window
@@ -438,7 +457,7 @@ ipcMain.handle('upload-attachments', async (_event, files: UploadFilePayload[]) 
 });
 
 // Send a message and stream response
-ipcMain.handle('send-message', async (_event, conversationId: string, message: string, parentMessageUuid: string, attachments: AttachmentPayload[] = []) => {
+ipcMain.handle('send-message', async (event, conversationId: string, message: string, parentMessageUuid: string, attachments: AttachmentPayload[] = []) => {
   const orgId = await getOrgId();
   if (!orgId) throw new Error('Not authenticated');
 
@@ -451,17 +470,18 @@ ipcMain.handle('send-message', async (_event, conversationId: string, message: s
   }
 
   const state = createStreamState();
+  const sender = event.sender;
 
   const callbacks: StreamCallbacks = {
     onTextDelta: (text, fullText, blockIndex) => {
-      mainWindow?.webContents.send('message-stream', { conversationId, blockIndex, text, fullText });
+      sender.send('message-stream', { conversationId, blockIndex, text, fullText });
     },
     onThinkingStart: (blockIndex) => {
-      mainWindow?.webContents.send('message-thinking', { conversationId, blockIndex, isThinking: true });
+      sender.send('message-thinking', { conversationId, blockIndex, isThinking: true });
     },
     onThinkingDelta: (thinking, blockIndex) => {
       const block = state.contentBlocks.get(blockIndex);
-      mainWindow?.webContents.send('message-thinking-stream', {
+      sender.send('message-thinking-stream', {
         conversationId,
         blockIndex,
         thinking,
@@ -469,7 +489,7 @@ ipcMain.handle('send-message', async (_event, conversationId: string, message: s
       });
     },
     onThinkingStop: (thinkingText, summaries, blockIndex) => {
-      mainWindow?.webContents.send('message-thinking', {
+      sender.send('message-thinking', {
         conversationId,
         blockIndex,
         isThinking: false,
@@ -478,7 +498,7 @@ ipcMain.handle('send-message', async (_event, conversationId: string, message: s
       });
     },
     onToolStart: (toolName, toolMessage, blockIndex) => {
-      mainWindow?.webContents.send('message-tool-use', {
+      sender.send('message-tool-use', {
         conversationId,
         blockIndex,
         toolName,
@@ -488,7 +508,7 @@ ipcMain.handle('send-message', async (_event, conversationId: string, message: s
     },
     onToolStop: (toolName, input, blockIndex) => {
       const block = state.contentBlocks.get(blockIndex);
-      mainWindow?.webContents.send('message-tool-use', {
+      sender.send('message-tool-use', {
         conversationId,
         blockIndex,
         toolName,
@@ -498,7 +518,7 @@ ipcMain.handle('send-message', async (_event, conversationId: string, message: s
       });
     },
     onToolResult: (toolName, result, isError, blockIndex) => {
-      mainWindow?.webContents.send('message-tool-result', {
+      sender.send('message-tool-result', {
         conversationId,
         blockIndex,
         toolName,
@@ -507,16 +527,16 @@ ipcMain.handle('send-message', async (_event, conversationId: string, message: s
       });
     },
     onCitation: (citation, blockIndex) => {
-      mainWindow?.webContents.send('message-citation', { conversationId, blockIndex, citation });
+      sender.send('message-citation', { conversationId, blockIndex, citation });
     },
     onToolApproval: (toolName, approvalKey, input) => {
-      mainWindow?.webContents.send('message-tool-approval', { conversationId, toolName, approvalKey, input });
+      sender.send('message-tool-approval', { conversationId, toolName, approvalKey, input });
     },
     onCompaction: (status, compactionMessage) => {
-      mainWindow?.webContents.send('message-compaction', { conversationId, status, message: compactionMessage });
+      sender.send('message-compaction', { conversationId, status, message: compactionMessage });
     },
     onComplete: (fullText, steps, messageUuid) => {
-      mainWindow?.webContents.send('message-complete', { conversationId, fullText, steps, messageUuid });
+      sender.send('message-complete', { conversationId, fullText, steps, messageUuid });
     }
   };
 
@@ -568,12 +588,24 @@ ipcMain.handle('save-settings', async (_event, settings: Partial<SettingsSchema>
   return getSettings();
 });
 
+// Window management
+ipcMain.handle('new-window', async () => {
+  const newWindow = createMainWindow();
+  newWindow.focus();
+  return { success: true };
+});
+
+ipcMain.handle('get-window-count', async () => {
+  return mainWindows.filter(w => !w.isDestroyed()).length;
+});
+
 // Handle deep link on Windows (single instance)
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
   app.quit();
 } else {
   app.on('second-instance', () => {
+    const mainWindow = getMainWindow();
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.focus();
