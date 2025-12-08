@@ -57,7 +57,7 @@ Download the latest DMG for your architecture:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/open-claude.git
+git clone https://github.com/tkattkat/open-claude.git
 cd open-claude
 
 # Install dependencies
@@ -95,7 +95,7 @@ Open Claude uses your existing claude.ai account. Click "Sign in with Claude" to
 ## Roadmap
 
 - [ ] MCP (Model Context Protocol) server support
-- [ ] File attachments and image uploads
+- [x] File attachments and image uploads
 - [ ] Custom keyboard shortcuts configuration
 - [ ] Multiple conversation windows
 - [ ] Export conversations to Markdown

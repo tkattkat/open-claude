@@ -1,31 +1,9 @@
-import {
-	app,
-	BrowserWindow,
-	ipcMain,
-	session,
-	globalShortcut,
-	screen,
-	Tray,
-	Menu,
-} from "electron";
-import path from "path";
-import crypto from "crypto";
-import {
-	isAuthenticated,
-	getOrgId,
-	makeRequest,
-	streamCompletion,
-	stopResponse,
-	generateTitle,
-	store,
-	BASE_URL,
-} from "./api/client";
-import {
-	createStreamState,
-	processSSEChunk,
-	type StreamCallbacks,
-} from "./streaming/parser";
-import type { SettingsSchema } from "./types";
+import { app, BrowserWindow, ipcMain, session, globalShortcut, screen, Tray, menu } from 'electron';
+import path from 'path';
+import crypto from 'crypto';
+import { isAuthenticated, getOrgId, makeRequest, streamCompletion, stopResponse, generateTitle, store, BASE_URL, prepareAttachmentPayload } from './api/client';
+import { createStreamState, processSSEChunk, type StreamCallbacks } from './streaming/parser';
+import type { SettingsSchema, AttachmentPayload, UploadFilePayload } from './types';
 
 let mainWindow: BrowserWindow | null = null;
 let spotlightWindow: BrowserWindow | null = null;
@@ -550,132 +528,109 @@ ipcMain.handle(
 	},
 );
 
+// Upload file attachments (prepare metadata only)
+ipcMain.handle('upload-attachments', async (_event, files: UploadFilePayload[]) => {
+  const uploads: AttachmentPayload[] = [];
+  for (const file of files || []) {
+    const attachment = await prepareAttachmentPayload(file);
+    uploads.push(attachment);
+  }
+
+  return uploads;
+});
+
 // Send a message and stream response
-ipcMain.handle(
-	"send-message",
-	async (
-		_event,
-		conversationId: string,
-		message: string,
-		parentMessageUuid: string,
-	) => {
-		const orgId = await getOrgId();
-		if (!orgId) throw new Error("Not authenticated");
+ipcMain.handle('send-message', async (_event, conversationId: string, message: string, parentMessageUuid: string, attachments: AttachmentPayload[] = []) => {
+  const orgId = await getOrgId();
+  if (!orgId) throw new Error('Not authenticated');
 
-		console.log("[API] Sending message to conversation:", conversationId);
-		console.log("[API] Parent message UUID:", parentMessageUuid);
-		console.log("[API] Message:", message.substring(0, 50) + "...");
+  console.log('[API] Sending message to conversation:', conversationId);
+  console.log('[API] Parent message UUID:', parentMessageUuid);
+  console.log('[API] Message:', message.substring(0, 50) + '...');
+  if (attachments?.length) {
+    console.log('[API] Attachments:', attachments.map(a => `${a.file_name} (${a.file_size})`).join(', '));
+    console.log('[API] File IDs:', attachments.map(a => a.document_id).join(', '));
+  }
 
-		const state = createStreamState();
+  const state = createStreamState();
 
-		const callbacks: StreamCallbacks = {
-			onTextDelta: (text, fullText, blockIndex) => {
-				mainWindow?.webContents.send("message-stream", {
-					conversationId,
-					blockIndex,
-					text,
-					fullText,
-				});
-			},
-			onThinkingStart: (blockIndex) => {
-				mainWindow?.webContents.send("message-thinking", {
-					conversationId,
-					blockIndex,
-					isThinking: true,
-				});
-			},
-			onThinkingDelta: (thinking, blockIndex) => {
-				const block = state.contentBlocks.get(blockIndex);
-				mainWindow?.webContents.send("message-thinking-stream", {
-					conversationId,
-					blockIndex,
-					thinking,
-					summaries: block?.summaries,
-				});
-			},
-			onThinkingStop: (thinkingText, summaries, blockIndex) => {
-				mainWindow?.webContents.send("message-thinking", {
-					conversationId,
-					blockIndex,
-					isThinking: false,
-					thinkingText,
-					summaries,
-				});
-			},
-			onToolStart: (toolName, toolMessage, blockIndex) => {
-				mainWindow?.webContents.send("message-tool-use", {
-					conversationId,
-					blockIndex,
-					toolName,
-					message: toolMessage,
-					isRunning: true,
-				});
-			},
-			onToolStop: (toolName, input, blockIndex) => {
-				const block = state.contentBlocks.get(blockIndex);
-				mainWindow?.webContents.send("message-tool-use", {
-					conversationId,
-					blockIndex,
-					toolName,
-					message: block?.toolMessage,
-					input,
-					isRunning: false,
-				});
-			},
-			onToolResult: (toolName, result, isError, blockIndex) => {
-				mainWindow?.webContents.send("message-tool-result", {
-					conversationId,
-					blockIndex,
-					toolName,
-					result,
-					isError,
-				});
-			},
-			onCitation: (citation, blockIndex) => {
-				mainWindow?.webContents.send("message-citation", {
-					conversationId,
-					blockIndex,
-					citation,
-				});
-			},
-			onToolApproval: (toolName, approvalKey, input) => {
-				mainWindow?.webContents.send("message-tool-approval", {
-					conversationId,
-					toolName,
-					approvalKey,
-					input,
-				});
-			},
-			onCompaction: (status, compactionMessage) => {
-				mainWindow?.webContents.send("message-compaction", {
-					conversationId,
-					status,
-					message: compactionMessage,
-				});
-			},
-			onComplete: (fullText, steps, messageUuid) => {
-				mainWindow?.webContents.send("message-complete", {
-					conversationId,
-					fullText,
-					steps,
-					messageUuid,
-				});
-			},
-		};
+  const callbacks: StreamCallbacks = {
+    onTextDelta: (text, fullText, blockIndex) => {
+      mainWindow?.webContents.send('message-stream', { conversationId, blockIndex, text, fullText });
+    },
+    onThinkingStart: (blockIndex) => {
+      mainWindow?.webContents.send('message-thinking', { conversationId, blockIndex, isThinking: true });
+    },
+    onThinkingDelta: (thinking, blockIndex) => {
+      const block = state.contentBlocks.get(blockIndex);
+      mainWindow?.webContents.send('message-thinking-stream', {
+        conversationId,
+        blockIndex,
+        thinking,
+        summaries: block?.summaries
+      });
+    },
+    onThinkingStop: (thinkingText, summaries, blockIndex) => {
+      mainWindow?.webContents.send('message-thinking', {
+        conversationId,
+        blockIndex,
+        isThinking: false,
+        thinkingText,
+        summaries
+      });
+    },
+    onToolStart: (toolName, toolMessage, blockIndex) => {
+      mainWindow?.webContents.send('message-tool-use', {
+        conversationId,
+        blockIndex,
+        toolName,
+        message: toolMessage,
+        isRunning: true
+      });
+    },
+    onToolStop: (toolName, input, blockIndex) => {
+      const block = state.contentBlocks.get(blockIndex);
+      mainWindow?.webContents.send('message-tool-use', {
+        conversationId,
+        blockIndex,
+        toolName,
+        message: block?.toolMessage,
+        input,
+        isRunning: false
+      });
+    },
+    onToolResult: (toolName, result, isError, blockIndex) => {
+      mainWindow?.webContents.send('message-tool-result', {
+        conversationId,
+        blockIndex,
+        toolName,
+        result,
+        isError
+      });
+    },
+    onCitation: (citation, blockIndex) => {
+      mainWindow?.webContents.send('message-citation', { conversationId, blockIndex, citation });
+    },
+    onToolApproval: (toolName, approvalKey, input) => {
+      mainWindow?.webContents.send('message-tool-approval', { conversationId, toolName, approvalKey, input });
+    },
+    onCompaction: (status, compactionMessage) => {
+      mainWindow?.webContents.send('message-compaction', { conversationId, status, message: compactionMessage });
+    },
+    onComplete: (fullText, steps, messageUuid) => {
+      mainWindow?.webContents.send('message-complete', { conversationId, fullText, steps, messageUuid });
+    }
+  };
 
-		await streamCompletion(
-			orgId,
-			conversationId,
-			message,
-			parentMessageUuid,
-			(chunk) => {
-				processSSEChunk(chunk, state, callbacks);
-			},
-		);
+  // Send Claude the uploaded file UUIDs (metadata stays client-side for display)
+  const fileIds = attachments?.map(a => a.document_id).filter(Boolean) || [];
 
-		return { text: state.fullResponse, messageUuid: state.lastMessageUuid };
-	},
-);
+  await streamCompletion(orgId, conversationId, message, parentMessageUuid, (chunk) => {
+    processSSEChunk(chunk, state, callbacks);
+  }, { attachments: [], files: fileIds });
+
+  return { text: state.fullResponse, messageUuid: state.lastMessageUuid };
+});
 
 // Stop a streaming response
 ipcMain.handle("stop-response", async (_event, conversationId: string) => {

@@ -1,7 +1,7 @@
 import { net, session } from 'electron';
 import Store from 'electron-store';
 import crypto from 'crypto';
-import type { StoreSchema, ApiResponse } from '../types';
+import type { StoreSchema, ApiResponse, AttachmentPayload, UploadFilePayload } from '../types';
 
 const BASE_URL = 'https://claude.ai';
 
@@ -29,6 +29,114 @@ export function getAnonymousId(): string {
     store.set('anonymousId', anonId);
   }
   return anonId;
+}
+
+// Convert various binary inputs to a Node.js Buffer
+function toBuffer(data: UploadFilePayload['data']): Buffer {
+  if (Buffer.isBuffer(data)) return data;
+  if (data instanceof ArrayBuffer) return Buffer.from(new Uint8Array(data));
+  if (data instanceof Uint8Array) return Buffer.from(data);
+  return Buffer.from(data);
+}
+
+// Normalize upload response into AttachmentPayload
+function normalizeAttachmentResponse(data: any, fallback: UploadFilePayload): AttachmentPayload {
+  const doc = data?.document || data || {};
+  const documentId = doc.document_id || doc.file_uuid || doc.uuid || doc.id || doc.file_id;
+  const fileUrl =
+    doc.file_url ||
+    doc.preview_url ||
+    doc.thumbnail_url ||
+    doc.url ||
+    data?.download_url;
+
+  if (!documentId) {
+    throw new Error('Upload response missing document identifier');
+  }
+
+  const normalizedUrl = fileUrl
+    ? (fileUrl.startsWith('http') ? fileUrl : `${BASE_URL}${fileUrl}`)
+    : undefined;
+
+  return {
+    document_id: documentId,
+    file_name: doc.file_name || doc.fileName || fallback.name,
+    file_size: doc.size_bytes || doc.file_size || doc.fileSize || fallback.size,
+    file_type: doc.file_type || doc.mime_type || doc.fileType || doc.file_kind || fallback.type || 'application/octet-stream',
+    file_url: normalizedUrl,
+    extracted_content: doc.extracted_content || doc.extract || doc.extracted_text
+  };
+}
+
+// Upload a single attachment and normalize the response
+export async function prepareAttachmentPayload(file: UploadFilePayload): Promise<AttachmentPayload> {
+  const orgId = await getOrgId();
+  if (!orgId) {
+    throw new Error('Not authenticated');
+  }
+
+  const boundary = '----ElectronFormBoundary' + crypto.randomBytes(16).toString('hex');
+  const fileBuffer = toBuffer(file.data);
+  const body = Buffer.concat([
+    Buffer.from(`--${boundary}\r\n`),
+    Buffer.from(`Content-Disposition: form-data; name="file"; filename="${file.name}"\r\n`),
+    Buffer.from(`Content-Type: ${file.type || 'application/octet-stream'}\r\n\r\n`),
+    fileBuffer,
+    Buffer.from(`\r\n--${boundary}--\r\n`)
+  ]);
+
+  return new Promise((resolve, reject) => {
+    const request = net.request({
+      url: `${BASE_URL}/api/${orgId}/upload`,
+      method: 'POST',
+      useSessionCookies: true,
+    });
+
+    request.setHeader('accept', '*/*');
+    request.setHeader('content-type', `multipart/form-data; boundary=${boundary}`);
+    request.setHeader('origin', BASE_URL);
+    request.setHeader('referer', `${BASE_URL}/new`);
+    request.setHeader('anthropic-client-platform', 'web_claude_ai');
+    request.setHeader('anthropic-device-id', getDeviceId());
+    request.setHeader('anthropic-anonymous-id', getAnonymousId());
+    request.setHeader(
+      'user-agent',
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    );
+
+    let responseData = '';
+    let statusCode = 0;
+
+    request.on('response', (response) => {
+      statusCode = response.statusCode;
+
+      response.on('data', (chunk) => {
+        responseData += chunk.toString();
+      });
+
+      response.on('end', () => {
+        try {
+          const parsed = responseData ? JSON.parse(responseData) : null;
+          if (statusCode !== 200) {
+            reject(new Error(`Upload failed: ${statusCode} - ${responseData}`));
+            return;
+          }
+          const attachment = normalizeAttachmentResponse(parsed, file);
+          console.log(`[API] Uploaded attachment: ${attachment.file_name} (${attachment.file_size} bytes)`);
+          resolve(attachment);
+        } catch (err) {
+          reject(new Error(`Upload parse failed: ${err instanceof Error ? err.message : String(err)}`));
+        }
+      });
+    });
+
+    request.on('error', (error) => {
+      reject(error);
+    });
+
+    request.write(body);
+    request.end();
+  });
 }
 
 // Check if we have valid session cookies
@@ -108,7 +216,12 @@ export async function streamCompletion(
   conversationId: string,
   prompt: string,
   parentMessageUuid: string,
-  onData: (chunk: string) => void
+  onData: (chunk: string) => void,
+  options: {
+    attachments?: AttachmentPayload[];
+    files?: Array<AttachmentPayload | string>;
+    sync_sources?: unknown[];
+  } = {}
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const url = `${BASE_URL}/api/organizations/${orgId}/chat_conversations/${conversationId}/completion`;
@@ -130,6 +243,8 @@ export async function streamCompletion(
     request.setHeader('anthropic-anonymous-id', getAnonymousId());
     request.setHeader('user-agent', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
 
+    const files = (options.files || []).map((file) => typeof file === 'string' ? file : file.document_id);
+
     const body = {
       prompt,
       parent_message_uuid: parentMessageUuid === conversationId ? null : parentMessageUuid,
@@ -150,9 +265,9 @@ export async function streamCompletion(
         { type: 'artifacts_v0', name: 'artifacts' },
         { type: 'repl_v0', name: 'repl' }
       ],
-      attachments: [],
-      files: [],
-      sync_sources: [],
+      attachments: options.attachments || [],
+      files,
+      sync_sources: options.sync_sources || [],
       rendering_mode: 'messages'
     };
 

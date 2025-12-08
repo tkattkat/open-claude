@@ -13,9 +13,13 @@ declare global {
       deleteConversation: (convId: string) => Promise<void>;
       renameConversation: (convId: string, name: string) => Promise<void>;
       starConversation: (convId: string, isStarred: boolean) => Promise<void>;
-      sendMessage: (convId: string, message: string, parentUuid: string) => Promise<void>;
+      sendMessage: (convId: string, message: string, parentUuid: string, attachments?: AttachmentPayload[]) => Promise<void>;
       stopResponse: (convId: string) => Promise<void>;
       generateTitle: (convId: string, messageContent: string) => Promise<void>;
+      uploadAttachments: (files: Array<{ name: string; size: number; type: string; data: ArrayBuffer | Uint8Array | number[] }>) => Promise<UploadedAttachmentPayload[]>;
+      openSettings: () => Promise<void>;
+      getSettings: () => Promise<{ spotlightKeybind?: string; spotlightPersistHistory?: boolean }>;
+      saveSettings: (settings: { spotlightKeybind?: string; spotlightPersistHistory?: boolean }) => Promise<{ spotlightKeybind?: string; spotlightPersistHistory?: boolean }>;
       onMessageThinking: (callback: (data: ThinkingData) => void) => void;
       onMessageThinkingStream: (callback: (data: ThinkingStreamData) => void) => void;
       onMessageToolUse: (callback: (data: ToolUseData) => void) => void;
@@ -64,6 +68,22 @@ interface Citation {
   title?: string;
   start_index?: number;
   end_index?: number;
+}
+
+interface AttachmentPayload {
+  document_id: string;
+  file_name: string;
+  file_size: number;
+  file_type: string;
+  file_url?: string;
+  extracted_content?: string;
+}
+
+interface UploadedAttachmentPayload extends AttachmentPayload {}
+
+interface UploadedAttachment extends AttachmentPayload {
+  id: string;
+  previewUrl?: string;
 }
 
 interface ThinkingData {
@@ -148,6 +168,9 @@ let streamingMessageUuid: string | null = null;
 let conversations: Conversation[] = [];
 let selectedModel = 'claude-opus-4-5-20251101';
 let openDropdownId: string | null = null;
+let pendingAttachments: UploadedAttachment[] = [];
+let uploadingAttachments = false;
+let attachmentError = '';
 
 const modelDisplayNames: Record<string, string> = {
   'claude-opus-4-5-20251101': 'Opus 4.5',
@@ -174,6 +197,111 @@ const $$ = (selector: string) => document.querySelectorAll(selector);
 
 function escapeHtml(text: string): string {
   return (text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function formatFileSize(bytes: number): string {
+  if (!bytes) return '0 B';
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), sizes.length - 1);
+  const value = bytes / Math.pow(1024, i);
+  return `${value.toFixed(value >= 10 || i === 0 ? 0 : 1)} ${sizes[i]}`;
+}
+
+function removeAttachment(id: string) {
+  pendingAttachments = pendingAttachments.filter(a => a.id !== id);
+  renderAttachmentList();
+}
+
+function renderAttachmentList() {
+  const containers = [
+    { list: $('attachment-list'), status: $('attachment-status') },
+    { list: $('home-attachment-list'), status: $('home-attachment-status') }
+  ];
+
+  const pills = pendingAttachments.map(a => `
+    <div class="attachment-pill" data-id="${a.id}">
+      <div class="attachment-icon">${a.file_type?.startsWith('image/') ? '🖼' : '📎'}</div>
+      <div class="attachment-meta">
+        <div class="attachment-name">${escapeHtml(a.file_name)}</div>
+        <div class="attachment-size">${formatFileSize(a.file_size)}</div>
+      </div>
+      <button class="attachment-remove" data-id="${a.id}" title="Remove">✕</button>
+    </div>
+  `).join('');
+
+  containers.forEach(({ list, status }) => {
+    if (!list) return;
+    const hasContent = pendingAttachments.length > 0 || uploadingAttachments || !!attachmentError;
+    list.parentElement?.classList.toggle('visible', hasContent);
+    list.innerHTML = pills;
+
+    list.querySelectorAll('.attachment-remove').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const id = (btn as HTMLElement).dataset.id;
+        if (id) removeAttachment(id);
+      });
+    });
+
+    if (status) {
+      status.textContent = uploadingAttachments ? 'Uploading attachments…' : attachmentError;
+      status.style.display = (uploadingAttachments || attachmentError) ? 'block' : 'none';
+      status.classList.toggle('error', !!attachmentError);
+    }
+  });
+}
+
+function clearAttachments() {
+  pendingAttachments = [];
+  attachmentError = '';
+  uploadingAttachments = false;
+  renderAttachmentList();
+}
+
+function getAttachmentPayloads(): AttachmentPayload[] {
+  return pendingAttachments.map(a => ({
+    document_id: a.document_id,
+    file_name: a.file_name,
+    file_size: a.file_size,
+    file_type: a.file_type,
+    file_url: a.file_url,
+    extracted_content: a.extracted_content
+  }));
+}
+
+async function handleFileSelection(fileList: FileList | null) {
+  if (!fileList || fileList.length === 0) return;
+
+  attachmentError = '';
+  uploadingAttachments = true;
+  renderAttachmentList();
+
+  try {
+    const uploadPayload = await Promise.all(Array.from(fileList).map(async (file) => ({
+      name: file.name,
+      size: file.size,
+      type: file.type || 'application/octet-stream',
+      data: await file.arrayBuffer()
+    })));
+
+    const results = await window.claude.uploadAttachments(uploadPayload);
+    const normalized = results.map(res => ({
+      id: crypto.randomUUID(),
+      document_id: res.document_id,
+      file_name: res.file_name,
+      file_size: res.file_size,
+      file_type: res.file_type,
+      file_url: res.file_url,
+      extracted_content: res.extracted_content
+    }));
+
+    pendingAttachments = [...pendingAttachments, ...normalized];
+  } catch (e: any) {
+    attachmentError = e?.message || 'Failed to upload attachments';
+  } finally {
+    uploadingAttachments = false;
+    renderAttachmentList();
+  }
 }
 
 function autoResize(el: HTMLTextAreaElement) {
@@ -494,7 +622,7 @@ const toolLabels: Record<string, string> = {
 };
 
 // Message functions
-function addMessage(role: string, content: string, raw = false, storedParentUuid: string | null = null, extraClasses = ''): HTMLElement {
+function addMessage(role: string, content: string, raw = false, storedParentUuid: string | null = null, extraClasses = '', attachments: UploadedAttachment[] = []): HTMLElement {
   const el = document.createElement('div');
   el.className = 'message ' + role + (extraClasses ? ' ' + extraClasses : '');
 
@@ -502,6 +630,21 @@ function addMessage(role: string, content: string, raw = false, storedParentUuid
   c.className = 'message-content';
   c.innerHTML = role === 'user' ? escapeHtml(content) : (raw ? content : parseMarkdown(content));
   el.appendChild(c);
+
+  if (role === 'user' && attachments.length > 0) {
+    const attachmentsEl = document.createElement('div');
+    attachmentsEl.className = 'message-attachments';
+    attachmentsEl.innerHTML = attachments.map(a => `
+      <div class="message-attachment-row">
+        <span class="message-attachment-icon">${a.file_type?.startsWith('image/') ? '🖼' : '📎'}</span>
+        <div class="message-attachment-info">
+          <div class="message-attachment-name">${escapeHtml(a.file_name)}</div>
+          <div class="message-attachment-size">${formatFileSize(a.file_size)}</div>
+        </div>
+      </div>
+    `).join('');
+    el.appendChild(attachmentsEl);
+  }
 
   if (role === 'user') {
     el.dataset.parentUuid = storedParentUuid || parentMessageUuid || conversationId || '';
@@ -1047,6 +1190,7 @@ function parseStoredMessageContent(content: ContentBlock[]): Step[] {
 // Load conversation
 async function loadConversation(convId: string) {
   try {
+    clearAttachments();
     const conv = await window.claude.loadConversation(convId);
     conversationId = convId;
 
@@ -1133,6 +1277,7 @@ async function logout() {
   conversationId = null;
   parentMessageUuid = null;
   conversations = [];
+  clearAttachments();
 
   const messagesEl = $('messages');
   if (messagesEl) {
@@ -1154,6 +1299,7 @@ async function startNewConversation() {
 function newChat() {
   conversationId = null;
   parentMessageUuid = null;
+  clearAttachments();
   const homeInput = $('home-input') as HTMLTextAreaElement;
   if (homeInput) homeInput.value = '';
   closeSidebar();
@@ -1165,6 +1311,14 @@ async function sendFromHome() {
   const input = $('home-input') as HTMLTextAreaElement;
   const msg = input?.value.trim();
   if (!msg || isLoading) return;
+  if (uploadingAttachments) {
+    attachmentError = 'Please wait for attachments to finish uploading';
+    renderAttachmentList();
+    return;
+  }
+
+  const attachmentPayloads = getAttachmentPayloads();
+  const userAttachmentCopies = [...pendingAttachments];
 
   isLoading = true;
   const homeSendBtn = $('home-send-btn') as HTMLButtonElement;
@@ -1195,7 +1349,7 @@ async function sendFromHome() {
     const sidebarTab = $('sidebar-tab');
     if (sidebarTab) sidebarTab.classList.remove('hidden');
 
-    addMessage('user', msg, false, null, 'fly-in');
+    addMessage('user', msg, false, null, 'fly-in', userAttachmentCopies);
 
     await new Promise(resolve => setTimeout(resolve, 200));
 
@@ -1211,7 +1365,9 @@ async function sendFromHome() {
       if (chatContainer) chatContainer.classList.remove('entering');
     }, 600);
 
-    await window.claude.sendMessage(conversationId, msg, parentMessageUuid!);
+    await window.claude.sendMessage(conversationId, msg, parentMessageUuid!, attachmentPayloads);
+
+    clearAttachments();
 
     window.claude.generateTitle(conversationId, msg).then(() => {
       loadConversationsList();
@@ -1244,6 +1400,14 @@ async function sendMessage() {
   const input = $('input') as HTMLTextAreaElement;
   const msg = input?.value.trim();
   if (!msg || isLoading || !conversationId) return;
+  if (uploadingAttachments) {
+    attachmentError = 'Please wait for attachments to finish uploading';
+    renderAttachmentList();
+    return;
+  }
+
+  const attachmentPayloads = getAttachmentPayloads();
+  const userAttachmentCopies = [...pendingAttachments];
 
   isLoading = true;
   if (input) {
@@ -1257,11 +1421,12 @@ async function sendMessage() {
   if (stopBtn) stopBtn.classList.add('visible');
 
   hideEmptyState();
-  addMessage('user', msg);
+  addMessage('user', msg, false, null, '', userAttachmentCopies);
   currentStreamingElement = addMessage('assistant', '<div class="loading-dots"><span></span><span></span><span></span></div>', true);
 
   try {
-    await window.claude.sendMessage(conversationId, msg, parentMessageUuid!);
+    await window.claude.sendMessage(conversationId, msg, parentMessageUuid!, attachmentPayloads);
+    clearAttachments();
   } catch (e: any) {
     if (currentStreamingElement) {
       const content = currentStreamingElement.querySelector('.message-content');
@@ -1462,6 +1627,15 @@ function setupEventListeners() {
     }
   });
 
+  // Attachment buttons
+  const fileInput = $('file-input') as HTMLInputElement;
+  $('attach-btn')?.addEventListener('click', () => fileInput?.click());
+  $('home-attach-btn')?.addEventListener('click', () => fileInput?.click());
+  fileInput?.addEventListener('change', () => {
+    handleFileSelection(fileInput.files);
+    fileInput.value = '';
+  });
+
   // Send button
   $('send-btn')?.addEventListener('click', sendMessage);
 
@@ -1510,3 +1684,4 @@ function setupEventListeners() {
 // Start the app
 init();
 setupEventListeners();
+renderAttachmentList();
