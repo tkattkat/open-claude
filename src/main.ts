@@ -56,16 +56,22 @@ function createSpotlightWindow() {
   const primaryDisplay = screen.getPrimaryDisplay();
   const { width: screenWidth } = primaryDisplay.workAreaSize;
 
+  const isMac = process.platform === 'darwin';
+
   spotlightWindow = new BrowserWindow({
     width: 600,
     height: 56,
     x: Math.round((screenWidth - 600) / 2),
     y: 180,
     frame: false,
-    transparent: true,
-    vibrancy: 'under-window',
-    visualEffectState: 'active',
-    backgroundColor: '#00000000',
+    transparent: isMac,
+    ...(isMac ? {
+      vibrancy: 'under-window',
+      visualEffectState: 'active',
+      backgroundColor: '#00000000',
+    } : {
+      backgroundColor: '#1a1a1a',
+    }),
     resizable: false,
     movable: true,
     minimizable: false,
@@ -95,20 +101,26 @@ function createSpotlightWindow() {
 }
 
 function createMainWindow() {
+  const isMac = process.platform === 'darwin';
+
   mainWindow = new BrowserWindow({
     width: 900,
     height: 700,
-    transparent: true,
-    vibrancy: 'under-window',
-    visualEffectState: 'active',
-    backgroundColor: '#00000000',
+    ...(isMac ? {
+      transparent: true,
+      vibrancy: 'under-window',
+      visualEffectState: 'active',
+      backgroundColor: '#00000000',
+      titleBarStyle: 'hiddenInset',
+      trafficLightPosition: { x: 16, y: 16 },
+    } : {
+      backgroundColor: '#1a1a1a',
+    }),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
     },
-    titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 16, y: 16 },
   });
 
   mainWindow.loadFile(path.join(__dirname, '../static/index.html'));
@@ -121,22 +133,28 @@ function createSettingsWindow() {
     return;
   }
 
+  const isMac = process.platform === 'darwin';
+
   settingsWindow = new BrowserWindow({
     width: 480,
     height: 520,
     minWidth: 400,
     minHeight: 400,
-    transparent: true,
-    vibrancy: 'under-window',
-    visualEffectState: 'active',
-    backgroundColor: '#00000000',
+    ...(isMac ? {
+      transparent: true,
+      vibrancy: 'under-window',
+      visualEffectState: 'active',
+      backgroundColor: '#00000000',
+      titleBarStyle: 'hiddenInset',
+      trafficLightPosition: { x: 16, y: 16 },
+    } : {
+      backgroundColor: '#1a1a1a',
+    }),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
     },
-    titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 16, y: 16 },
   });
 
   settingsWindow.loadFile(path.join(__dirname, '../static/settings.html'));
