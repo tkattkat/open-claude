@@ -58,7 +58,7 @@ Download the latest DMG for your architecture:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/open-claude.git
+git clone https://github.com/tkattkat/open-claude.git
 cd open-claude
 
 # Install dependencies
