@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import { isAuthenticated, getOrgId, makeRequest, streamCompletion, stopResponse, generateTitle, store, BASE_URL, prepareAttachmentPayload } from './api/client';
 import { createStreamState, processSSEChunk, type StreamCallbacks } from './streaming/parser';
 import type { SettingsSchema, AttachmentPayload, UploadFilePayload, MCPServerConfig } from './types';
+import { mcpClient } from './mcp/client';
 
 let mainWindows: BrowserWindow[] = [];
 let spotlightWindow: BrowserWindow | null = null;
@@ -32,6 +33,35 @@ function getSettings(): SettingsSchema {
 function saveSettings(settings: Partial<SettingsSchema>) {
   const current = getSettings();
   store.set('settings', { ...current, ...settings });
+}
+
+// Connect to all enabled MCP servers
+async function connectMCPServers(): Promise<void> {
+  const settings = getSettings();
+  const servers = settings.mcpServers || [];
+
+  // Disconnect all first
+  await mcpClient.disconnectAll();
+
+  // Connect to enabled servers
+  for (const server of servers) {
+    if (server.enabled) {
+      try {
+        await mcpClient.connect(server);
+      } catch (error) {
+        console.error(`[MCP] Failed to connect to ${server.name}:`, error);
+      }
+    }
+  }
+}
+
+// Get all available MCP tools for Claude API
+function getMCPToolsForAPI(): Array<{
+  name: string;
+  description: string;
+  input_schema: { type: string; properties?: Record<string, unknown>; required?: string[] };
+}> {
+  return mcpClient.getToolsForClaude();
 }
 
 // Register spotlight shortcut
@@ -621,6 +651,8 @@ ipcMain.handle('add-mcp-server', async (_event, server: MCPServerConfig) => {
   const settings = getSettings();
   const mcpServers = [...(settings.mcpServers || []), { ...server, id: crypto.randomUUID() }];
   saveSettings({ mcpServers });
+  // Reconnect MCP servers to pick up new server
+  await connectMCPServers();
   return getSettings().mcpServers;
 });
 
@@ -630,6 +662,8 @@ ipcMain.handle('update-mcp-server', async (_event, serverId: string, updates: Pa
     s.id === serverId ? { ...s, ...updates } : s
   );
   saveSettings({ mcpServers });
+  // Reconnect MCP servers to apply updates
+  await connectMCPServers();
   return getSettings().mcpServers;
 });
 
@@ -637,6 +671,8 @@ ipcMain.handle('remove-mcp-server', async (_event, serverId: string) => {
   const settings = getSettings();
   const mcpServers = (settings.mcpServers || []).filter(s => s.id !== serverId);
   saveSettings({ mcpServers });
+  // Reconnect MCP servers (will disconnect removed server)
+  await connectMCPServers();
   return getSettings().mcpServers;
 });
 
@@ -646,7 +682,36 @@ ipcMain.handle('toggle-mcp-server', async (_event, serverId: string) => {
     s.id === serverId ? { ...s, enabled: !s.enabled } : s
   );
   saveSettings({ mcpServers });
+  // Reconnect MCP servers to apply toggle
+  await connectMCPServers();
   return getSettings().mcpServers;
+});
+
+// Get available MCP tools
+ipcMain.handle('get-mcp-tools', async () => {
+  return getMCPToolsForAPI();
+});
+
+// Execute MCP tool
+ipcMain.handle('execute-mcp-tool', async (_event, toolName: string, args: Record<string, unknown>) => {
+  // Parse the tool name to find the server (format: mcp_serverName_toolName)
+  const parts = toolName.split('_');
+  if (parts.length < 3 || parts[0] !== 'mcp') {
+    throw new Error(`Invalid MCP tool name: ${toolName}`);
+  }
+
+  const serverName = parts[1];
+  const actualToolName = parts.slice(2).join('_');
+
+  // Find the server connection by name
+  const connections = mcpClient.getAllConnections();
+  const connection = connections.find(c => c.config.name === serverName);
+
+  if (!connection || !connection.isConnected) {
+    throw new Error(`MCP server ${serverName} is not connected`);
+  }
+
+  return await mcpClient.callTool(connection.config.id, actualToolName, args);
 });
 
 // Handle deep link on Windows (single instance)
@@ -663,11 +728,14 @@ if (!gotTheLock) {
   });
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   createMainWindow();
 
   // Register spotlight shortcut from settings
   registerSpotlightShortcut();
+
+  // Connect to MCP servers
+  await connectMCPServers();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -676,9 +744,10 @@ app.whenReady().then(() => {
   });
 });
 
-// Unregister shortcuts when app quits
-app.on('will-quit', () => {
+// Unregister shortcuts and disconnect MCP when app quits
+app.on('will-quit', async () => {
   globalShortcut.unregisterAll();
+  await mcpClient.disconnectAll();
 });
 
 app.on('window-all-closed', () => {

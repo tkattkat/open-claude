@@ -125,6 +125,9 @@ contextBridge.exposeInMainWorld('claude', {
     ipcRenderer.invoke('update-mcp-server', serverId, updates),
   removeMCPServer: (serverId: string) => ipcRenderer.invoke('remove-mcp-server', serverId),
   toggleMCPServer: (serverId: string) => ipcRenderer.invoke('toggle-mcp-server', serverId),
+  getMCPTools: () => ipcRenderer.invoke('get-mcp-tools'),
+  executeMCPTool: (toolName: string, args: Record<string, unknown>) =>
+    ipcRenderer.invoke('execute-mcp-tool', toolName, args),
 
   // Window management
   newWindow: () => ipcRenderer.invoke('new-window'),
