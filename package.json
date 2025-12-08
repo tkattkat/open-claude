@@ -34,6 +34,16 @@
         }
       ]
     },
+    "linux": {
+      "maintainer": "Nathaniel Chappelle nathaniel@chappelle.dev",
+      "target": [
+	"AppImage",
+	"deb"
+      ],
+      "category": "Utility",
+      "icon": "build/linux-icon.png",
+      "executableName": "open-claude"
+    },
     "dmg": {
       "title": "Open Claude",
       "icon": "build/icon.icns"
