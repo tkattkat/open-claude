@@ -26,6 +26,8 @@ declare global {
       onMessageToolResult: (callback: (data: ToolResultData) => void) => void;
       onMessageStream: (callback: (data: StreamData) => void) => void;
       onMessageComplete: (callback: (data: CompleteData) => void) => void;
+      newWindow: () => Promise<{ success: boolean }>;
+      getWindowCount: () => Promise<number>;
     };
   }
 }
@@ -1595,6 +1597,11 @@ function setupEventListeners() {
     window.claude.openSettings();
   });
 
+  // New window button
+  $('new-window-btn')?.addEventListener('click', () => {
+    window.claude.newWindow();
+  });
+
   // Sidebar toggle
   $('sidebar-tab')?.addEventListener('click', toggleSidebar);
   $('sidebar-overlay')?.addEventListener('click', closeSidebar);
@@ -1647,6 +1654,11 @@ function setupEventListeners() {
     if ((e.metaKey || e.ctrlKey) && e.key === 's') {
       e.preventDefault();
       toggleSidebar();
+    }
+    // Cmd/Ctrl+Shift+N: New window
+    if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'N') {
+      e.preventDefault();
+      window.claude.newWindow();
     }
   });
 
