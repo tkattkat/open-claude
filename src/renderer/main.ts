@@ -13,6 +13,7 @@ declare global {
       deleteConversation: (convId: string) => Promise<void>;
       renameConversation: (convId: string, name: string) => Promise<void>;
       starConversation: (convId: string, isStarred: boolean) => Promise<void>;
+      exportConversationMarkdown: (conversationData: { title: string; messages: Array<{ role: string; content: string; timestamp?: string }> }) => Promise<{ success: boolean; canceled?: boolean; filePath?: string }>;
       sendMessage: (convId: string, message: string, parentUuid: string, attachments?: AttachmentPayload[]) => Promise<void>;
       stopResponse: (convId: string) => Promise<void>;
       generateTitle: (convId: string, messageContent: string) => Promise<void>;
@@ -171,6 +172,8 @@ let openDropdownId: string | null = null;
 let pendingAttachments: UploadedAttachment[] = [];
 let uploadingAttachments = false;
 let attachmentError = '';
+let currentConversationTitle = '';
+let currentConversationMessages: Array<{ role: string; content: string; timestamp?: string }> = [];
 
 const modelDisplayNames: Record<string, string> = {
   'claude-opus-4-5-20251101': 'Opus 4.5',
@@ -1193,6 +1196,8 @@ async function loadConversation(convId: string) {
     clearAttachments();
     const conv = await window.claude.loadConversation(convId);
     conversationId = convId;
+    currentConversationTitle = conv.name || 'Conversation';
+    currentConversationMessages = [];
 
     isLoading = false;
     const sendBtn = $('send-btn');
@@ -1224,16 +1229,28 @@ async function loadConversation(convId: string) {
           }
           if (text) {
             addMessage('user', text, false, prevMsgUuid);
+            currentConversationMessages.push({ role: 'human', content: text, timestamp: msg.created_at });
           }
         } else {
+          let assistantText = '';
           if (msg.content && Array.isArray(msg.content)) {
             const steps = parseStoredMessageContent(msg.content);
             if (steps.length > 0) {
               const html = buildInterleavedContent(steps);
               addMessageRaw('assistant', html);
+              // Extract text content for export
+              for (const step of steps) {
+                if (step.type === 'text') {
+                  assistantText += step.text || '';
+                }
+              }
             }
           } else if (msg.text) {
             addMessage('assistant', msg.text);
+            assistantText = msg.text;
+          }
+          if (assistantText) {
+            currentConversationMessages.push({ role: 'assistant', content: assistantText, timestamp: msg.created_at });
           }
         }
 
@@ -1254,6 +1271,29 @@ async function loadConversation(convId: string) {
     scrollToBottom();
   } catch (e) {
     console.error('Failed to load conversation:', e);
+  }
+}
+
+// Export conversation to Markdown
+async function exportConversation() {
+  if (!conversationId || currentConversationMessages.length === 0) {
+    console.error('No conversation to export');
+    return;
+  }
+
+  try {
+    const result = await window.claude.exportConversationMarkdown({
+      title: currentConversationTitle,
+      messages: currentConversationMessages
+    });
+
+    if (result.success) {
+      console.log('Conversation exported to:', result.filePath);
+    } else if (!result.canceled) {
+      console.error('Failed to export conversation');
+    }
+  } catch (e) {
+    console.error('Failed to export conversation:', e);
   }
 }
 
@@ -1422,6 +1462,7 @@ async function sendMessage() {
 
   hideEmptyState();
   addMessage('user', msg, false, null, '', userAttachmentCopies);
+  currentConversationMessages.push({ role: 'human', content: msg, timestamp: new Date().toISOString() });
   currentStreamingElement = addMessage('assistant', '<div class="loading-dots"><span></span><span></span><span></span></div>', true);
 
   try {
@@ -1563,6 +1604,12 @@ async function init() {
         });
       }
       parentMessageUuid = d.messageUuid;
+
+      // Store assistant message for export
+      if (d.fullText) {
+        currentConversationMessages.push({ role: 'assistant', content: d.fullText, timestamp: new Date().toISOString() });
+      }
+
       currentStreamingElement = null;
       resetStreamingBlocks();
       isLoading = false;
@@ -1594,6 +1641,9 @@ function setupEventListeners() {
   $('settings-btn')?.addEventListener('click', () => {
     window.claude.openSettings();
   });
+
+  // Export button
+  $('export-btn')?.addEventListener('click', exportConversation);
 
   // Sidebar toggle
   $('sidebar-tab')?.addEventListener('click', toggleSidebar);
