@@ -457,8 +457,13 @@ ipcMain.handle('export-conversation-markdown', async (_event, conversationData: 
   }
 
   // Write file
-  fs.writeFileSync(result.filePath, markdown, 'utf-8');
-  return { success: true, filePath: result.filePath };
+  try {
+    fs.writeFileSync(result.filePath, markdown, 'utf-8');
+    return { success: true, filePath: result.filePath };
+  } catch (error) {
+    console.error('Failed to write file:', error);
+    return { success: false, error: 'Failed to write file' };
+  }
 });
 
 // Upload file attachments (prepare metadata only)
