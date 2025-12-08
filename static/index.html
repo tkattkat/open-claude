@@ -116,10 +116,18 @@
     .home-drag-region {
       position: absolute;
       top: 0;
-      left: 30px; /* Leave space for sidebar tab */
+      left: 70px;
       right: 0;
       height: 50px;
       -webkit-app-region: drag;
+    }
+
+    .home-header-left {
+      position: absolute;
+      top: 10px;
+      left: 80px;
+      z-index: 10;
+      -webkit-app-region: no-drag;
     }
 
     .home-logo {
@@ -358,6 +366,134 @@
     .chat-container { display: none; flex-direction: column; height: 100vh; position: relative; }
     .chat-container.active { display: flex; }
 
+    /* Tab bar */
+    .tab-bar {
+      display: flex;
+      align-items: center;
+      height: 36px;
+      padding: 4px 8px 0 80px;
+      background: transparent;
+      -webkit-app-region: drag;
+      gap: 2px;
+      overflow-x: auto;
+      overflow-y: hidden;
+    }
+
+    .tab-bar::-webkit-scrollbar { display: none; }
+
+    #tabs-container {
+      display: flex;
+      gap: 2px;
+      flex: 1;
+      min-width: 0;
+      overflow-x: auto;
+      overflow-y: hidden;
+    }
+
+    #tabs-container::-webkit-scrollbar { display: none; }
+
+    .tab {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      max-width: 180px;
+      min-width: 100px;
+      height: 28px;
+      background: rgba(0, 0, 0, 0.04);
+      border: 1px solid rgba(0, 0, 0, 0.06);
+      border-bottom: none;
+      border-radius: 8px 8px 0 0;
+      cursor: pointer;
+      -webkit-app-region: no-drag;
+      transition: all 0.15s;
+      position: relative;
+    }
+
+    .tab:hover {
+      background: rgba(0, 0, 0, 0.08);
+    }
+
+    .tab.active {
+      background: rgba(255, 255, 255, 0.8);
+      border-color: rgba(0, 0, 0, 0.1);
+    }
+
+    .tab.dragging {
+      opacity: 0.5;
+    }
+
+    .tab-title {
+      flex: 1;
+      font-size: 12px;
+      font-weight: 500;
+      color: rgba(0, 0, 0, 0.6);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .tab.active .tab-title {
+      color: rgba(0, 0, 0, 0.85);
+    }
+
+    .tab-close {
+      width: 16px;
+      height: 16px;
+      border-radius: 4px;
+      border: none;
+      background: transparent;
+      color: rgba(0, 0, 0, 0.3);
+      font-size: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      opacity: 0;
+      transition: all 0.1s;
+      flex-shrink: 0;
+    }
+
+    .tab:hover .tab-close {
+      opacity: 1;
+    }
+
+    .tab-close:hover {
+      background: rgba(0, 0, 0, 0.1);
+      color: rgba(0, 0, 0, 0.7);
+    }
+
+    .new-tab-btn {
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      border: none;
+      background: transparent;
+      color: rgba(0, 0, 0, 0.4);
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      -webkit-app-region: no-drag;
+      transition: all 0.15s;
+      flex-shrink: 0;
+    }
+
+    .new-tab-btn:hover {
+      background: rgba(0, 0, 0, 0.08);
+      color: rgba(0, 0, 0, 0.7);
+    }
+
+    .tab-bar-actions {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-left: auto;
+      padding-left: 8px;
+      -webkit-app-region: no-drag;
+    }
+
     /* Header */
     .header {
       padding: 0 16px;
@@ -374,6 +510,11 @@
       align-items: center;
       gap: 8px;
       margin-left: 70px;
+      transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .sidebar-open .header-left {
+      margin-left: 8px;
     }
 
     .icon-btn {
@@ -395,6 +536,11 @@
     .icon-btn:hover {
       background: rgba(0, 0, 0, 0.06);
       color: rgba(0, 0, 0, 0.7);
+    }
+
+    .sidebar-toggle-btn.active {
+      background: rgba(204, 120, 92, 0.15);
+      color: #CC785C;
     }
 
     .header-right {
@@ -459,7 +605,7 @@
       -webkit-backdrop-filter: blur(40px);
       border-right: 1px solid rgba(0, 0, 0, 0.1);
       transform: translateX(-100%);
-      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.1s ease-out;
       z-index: 101;
       display: flex;
       flex-direction: column;
@@ -469,63 +615,25 @@
       transform: translateX(0);
     }
 
-    /* Sidebar trigger tab - invisible hover zone spanning 70% of height */
-    .sidebar-tab {
-      position: fixed;
-      left: 0;
-      top: 15%;
-      width: 6px;
-      height: 70%;
-      background: transparent;
-      cursor: pointer;
-      z-index: 99;
-      -webkit-app-region: no-drag;
+    .sidebar.resizing {
+      transition: none;
     }
 
-    .sidebar-tab:hover {
-      width: 24px;
-    }
-
-    /* The visual indicator that follows the mouse */
-    .sidebar-tab-indicator {
+    /* Sidebar resize handle */
+    .sidebar-resize-handle {
       position: absolute;
-      left: 0;
+      top: 0;
+      right: -3px;
       width: 6px;
-      height: 60px;
-      background: rgba(0, 0, 0, 0.08);
-      border-radius: 0 4px 4px 0;
-      transform: translateY(-50%);
-      transition: width 0.2s, background 0.2s;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      pointer-events: none;
-      opacity: 0;
+      height: 100%;
+      cursor: ew-resize;
+      z-index: 102;
+      background: transparent;
     }
 
-    .sidebar-tab:hover .sidebar-tab-indicator {
-      width: 24px;
-      background: rgba(0, 0, 0, 0.12);
-      opacity: 1;
-    }
-
-    .sidebar-tab-indicator::after {
-      content: '';
-      width: 2px;
-      height: 20px;
-      background: rgba(0, 0, 0, 0.25);
-      border-radius: 1px;
-      opacity: 0;
-      transition: opacity 0.2s;
-    }
-
-    .sidebar-tab:hover .sidebar-tab-indicator::after {
-      opacity: 1;
-    }
-
-    .sidebar-tab.hidden {
-      opacity: 0;
-      pointer-events: none;
+    .sidebar-resize-handle:hover,
+    .sidebar-resize-handle.dragging {
+      background: rgba(204, 120, 92, 0.3);
     }
 
     .sidebar-header {
@@ -1702,6 +1810,41 @@
         background: rgba(255, 255, 255, 0.1);
         color: rgba(255, 255, 255, 0.8);
       }
+      .sidebar-toggle-btn.active {
+        background: rgba(204, 120, 92, 0.25);
+        color: #E8C4A0;
+      }
+      .tab {
+        background: rgba(255, 255, 255, 0.05);
+        border-color: rgba(255, 255, 255, 0.08);
+      }
+      .tab:hover {
+        background: rgba(255, 255, 255, 0.1);
+      }
+      .tab.active {
+        background: rgba(255, 255, 255, 0.12);
+        border-color: rgba(255, 255, 255, 0.15);
+      }
+      .tab-title {
+        color: rgba(255, 255, 255, 0.6);
+      }
+      .tab.active .tab-title {
+        color: rgba(255, 255, 255, 0.9);
+      }
+      .tab-close {
+        color: rgba(255, 255, 255, 0.4);
+      }
+      .tab-close:hover {
+        background: rgba(255, 255, 255, 0.15);
+        color: rgba(255, 255, 255, 0.8);
+      }
+      .new-tab-btn {
+        color: rgba(255, 255, 255, 0.5);
+      }
+      .new-tab-btn:hover {
+        background: rgba(255, 255, 255, 0.1);
+        color: rgba(255, 255, 255, 0.8);
+      }
       .model-badge { color: rgba(255, 255, 255, 0.4); }
       .sign-out-btn {
         color: rgba(255, 255, 255, 0.4);
@@ -1900,16 +2043,12 @@
     </div>
   </div>
 
-  <!-- Sidebar tab trigger (edge hover) -->
-  <div class="sidebar-tab" id="sidebar-tab">
-    <div class="sidebar-tab-indicator" id="sidebar-tab-indicator"></div>
-  </div>
-
   <!-- Sidebar overlay (shared) -->
   <div class="sidebar-overlay" id="sidebar-overlay"></div>
 
   <!-- Sidebar (shared between home and chat) -->
   <div class="sidebar" id="sidebar">
+    <div class="sidebar-resize-handle" id="sidebar-resize-handle"></div>
     <div class="sidebar-header">
       <span class="sidebar-title">Chats</span>
       <div class="sidebar-spacer"></div>
@@ -1930,6 +2069,14 @@
   <div id="home" class="home-container">
     <!-- Draggable area for window movement -->
     <div class="home-drag-region"></div>
+    <div class="home-header-left">
+      <button class="icon-btn sidebar-toggle-btn" id="home-sidebar-toggle-btn" title="Toggle sidebar">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+          <line x1="9" y1="3" x2="9" y2="21"></line>
+        </svg>
+      </button>
+    </div>
     <div class="home-content">
       <div class="home-logo">✦</div>
       <div class="home-input-area">
@@ -1961,12 +2108,23 @@
   </div>
 
   <div id="chat" class="chat-container">
-    <!-- Header -->
-    <div class="header">
-      <div class="header-left">
-        <!-- Icons removed - using sidebar tab instead -->
-      </div>
-      <div class="header-right">
+    <!-- Tab bar -->
+    <div class="tab-bar" id="tab-bar">
+      <button class="icon-btn sidebar-toggle-btn" id="sidebar-toggle-btn" title="Toggle sidebar" style="margin-right: 8px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+          <line x1="9" y1="3" x2="9" y2="21"></line>
+        </svg>
+      </button>
+      <div id="tabs-container"></div>
+      <button class="new-tab-btn" id="new-tab-btn" title="New tab">+</button>
+      <button class="new-tab-btn" id="new-window-btn" title="New window">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+          <line x1="9" y1="3" x2="9" y2="21"></line>
+        </svg>
+      </button>
+      <div class="tab-bar-actions">
         <span class="model-badge">Opus 4.5</span>
         <button class="sign-out-btn" id="chat-logout-btn">Sign Out</button>
       </div>

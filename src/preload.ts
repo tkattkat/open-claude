@@ -125,4 +125,13 @@ contextBridge.exposeInMainWorld('claude', {
     ipcRenderer.invoke('update-mcp-server', serverId, updates),
   removeMCPServer: (serverId: string) => ipcRenderer.invoke('remove-mcp-server', serverId),
   toggleMCPServer: (serverId: string) => ipcRenderer.invoke('toggle-mcp-server', serverId),
+
+  // Window management
+  newWindow: () => ipcRenderer.invoke('new-window'),
+  detachTab: (tabData: { conversationId: string | null; title: string }) =>
+    ipcRenderer.invoke('detach-tab', tabData),
+  getWindowCount: () => ipcRenderer.invoke('get-window-count'),
+  onReceiveTab: (callback: (data: { conversationId: string | null; title: string }) => void) => {
+    ipcRenderer.on('receive-tab', (_event, data) => callback(data));
+  },
 });

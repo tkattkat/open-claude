@@ -5,9 +5,15 @@ import { isAuthenticated, getOrgId, makeRequest, streamCompletion, stopResponse,
 import { createStreamState, processSSEChunk, type StreamCallbacks } from './streaming/parser';
 import type { SettingsSchema, AttachmentPayload, UploadFilePayload, MCPServerConfig } from './types';
 
-let mainWindow: BrowserWindow | null = null;
+let mainWindows: BrowserWindow[] = [];
 let spotlightWindow: BrowserWindow | null = null;
 let settingsWindow: BrowserWindow | null = null;
+
+// Helper to get the focused main window or first one
+function getMainWindow(): BrowserWindow | null {
+  const focused = mainWindows.find(w => w.isFocused());
+  return focused || mainWindows[0] || null;
+}
 
 // Default settings
 const DEFAULT_SETTINGS: SettingsSchema = {
@@ -95,8 +101,8 @@ function createSpotlightWindow() {
   });
 }
 
-function createMainWindow() {
-  mainWindow = new BrowserWindow({
+function createMainWindow(): BrowserWindow {
+  const win = new BrowserWindow({
     width: 900,
     height: 700,
     transparent: true,
@@ -112,7 +118,20 @@ function createMainWindow() {
     trafficLightPosition: { x: 16, y: 16 },
   });
 
-  mainWindow.loadFile(path.join(__dirname, '../static/index.html'));
+  win.loadFile(path.join(__dirname, '../static/index.html'));
+
+  // Track window
+  mainWindows.push(win);
+
+  // Remove from array when closed
+  win.on('closed', () => {
+    const index = mainWindows.indexOf(win);
+    if (index > -1) {
+      mainWindows.splice(index, 1);
+    }
+  });
+
+  return win;
 }
 
 // Create settings window
@@ -439,7 +458,7 @@ ipcMain.handle('upload-attachments', async (_event, files: UploadFilePayload[]) 
 });
 
 // Send a message and stream response
-ipcMain.handle('send-message', async (_event, conversationId: string, message: string, parentMessageUuid: string, attachments: AttachmentPayload[] = []) => {
+ipcMain.handle('send-message', async (event, conversationId: string, message: string, parentMessageUuid: string, attachments: AttachmentPayload[] = []) => {
   const orgId = await getOrgId();
   if (!orgId) throw new Error('Not authenticated');
 
@@ -452,17 +471,18 @@ ipcMain.handle('send-message', async (_event, conversationId: string, message: s
   }
 
   const state = createStreamState();
+  const sender = event.sender;
 
   const callbacks: StreamCallbacks = {
     onTextDelta: (text, fullText, blockIndex) => {
-      mainWindow?.webContents.send('message-stream', { conversationId, blockIndex, text, fullText });
+      sender.send('message-stream', { conversationId, blockIndex, text, fullText });
     },
     onThinkingStart: (blockIndex) => {
-      mainWindow?.webContents.send('message-thinking', { conversationId, blockIndex, isThinking: true });
+      sender.send('message-thinking', { conversationId, blockIndex, isThinking: true });
     },
     onThinkingDelta: (thinking, blockIndex) => {
       const block = state.contentBlocks.get(blockIndex);
-      mainWindow?.webContents.send('message-thinking-stream', {
+      sender.send('message-thinking-stream', {
         conversationId,
         blockIndex,
         thinking,
@@ -470,7 +490,7 @@ ipcMain.handle('send-message', async (_event, conversationId: string, message: s
       });
     },
     onThinkingStop: (thinkingText, summaries, blockIndex) => {
-      mainWindow?.webContents.send('message-thinking', {
+      sender.send('message-thinking', {
         conversationId,
         blockIndex,
         isThinking: false,
@@ -479,7 +499,7 @@ ipcMain.handle('send-message', async (_event, conversationId: string, message: s
       });
     },
     onToolStart: (toolName, toolMessage, blockIndex) => {
-      mainWindow?.webContents.send('message-tool-use', {
+      sender.send('message-tool-use', {
         conversationId,
         blockIndex,
         toolName,
@@ -489,7 +509,7 @@ ipcMain.handle('send-message', async (_event, conversationId: string, message: s
     },
     onToolStop: (toolName, input, blockIndex) => {
       const block = state.contentBlocks.get(blockIndex);
-      mainWindow?.webContents.send('message-tool-use', {
+      sender.send('message-tool-use', {
         conversationId,
         blockIndex,
         toolName,
@@ -499,7 +519,7 @@ ipcMain.handle('send-message', async (_event, conversationId: string, message: s
       });
     },
     onToolResult: (toolName, result, isError, blockIndex) => {
-      mainWindow?.webContents.send('message-tool-result', {
+      sender.send('message-tool-result', {
         conversationId,
         blockIndex,
         toolName,
@@ -508,16 +528,16 @@ ipcMain.handle('send-message', async (_event, conversationId: string, message: s
       });
     },
     onCitation: (citation, blockIndex) => {
-      mainWindow?.webContents.send('message-citation', { conversationId, blockIndex, citation });
+      sender.send('message-citation', { conversationId, blockIndex, citation });
     },
     onToolApproval: (toolName, approvalKey, input) => {
-      mainWindow?.webContents.send('message-tool-approval', { conversationId, toolName, approvalKey, input });
+      sender.send('message-tool-approval', { conversationId, toolName, approvalKey, input });
     },
     onCompaction: (status, compactionMessage) => {
-      mainWindow?.webContents.send('message-compaction', { conversationId, status, message: compactionMessage });
+      sender.send('message-compaction', { conversationId, status, message: compactionMessage });
     },
     onComplete: (fullText, steps, messageUuid) => {
-      mainWindow?.webContents.send('message-complete', { conversationId, fullText, steps, messageUuid });
+      sender.send('message-complete', { conversationId, fullText, steps, messageUuid });
     }
   };
 
@@ -569,6 +589,28 @@ ipcMain.handle('save-settings', async (_event, settings: Partial<SettingsSchema>
   return getSettings();
 });
 
+// Window management
+ipcMain.handle('new-window', async () => {
+  const win = createMainWindow();
+  return { windowId: win.id };
+});
+
+ipcMain.handle('detach-tab', async (_event, tabData: { conversationId: string | null; title: string }) => {
+  // Create a new window and send it the tab data
+  const win = createMainWindow();
+
+  // Wait for the window to load, then send the tab data
+  win.webContents.once('did-finish-load', () => {
+    win.webContents.send('receive-tab', tabData);
+  });
+
+  return { windowId: win.id };
+});
+
+ipcMain.handle('get-window-count', async () => {
+  return mainWindows.length;
+});
+
 // MCP Server management
 ipcMain.handle('get-mcp-servers', async () => {
   const settings = getSettings();
@@ -613,9 +655,10 @@ if (!gotTheLock) {
   app.quit();
 } else {
   app.on('second-instance', () => {
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.focus();
+    const win = getMainWindow();
+    if (win) {
+      if (win.isMinimized()) win.restore();
+      win.focus();
     }
   });
 }

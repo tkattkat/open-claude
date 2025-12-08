@@ -160,6 +160,20 @@ interface StreamingBlock {
 }
 
 
+// Tab interface
+interface Tab {
+  id: string;
+  conversationId: string | null;
+  parentMessageUuid: string | null;
+  title: string;
+  messagesHtml: string;
+  isLoading: boolean;
+}
+
+let tabs: Tab[] = [];
+let activeTabId: string | null = null;
+
+// Current tab state (derived from active tab)
 let conversationId: string | null = null;
 let parentMessageUuid: string | null = null;
 let isLoading = false;
@@ -339,12 +353,10 @@ function showLogin() {
   const login = $('login');
   const home = $('home');
   const chat = $('chat');
-  const sidebarTab = $('sidebar-tab');
 
   if (login) login.style.display = 'flex';
   if (home) home.classList.remove('active');
   if (chat) chat.classList.remove('active');
-  if (sidebarTab) sidebarTab.classList.add('hidden');
   closeSidebar();
 }
 
@@ -352,13 +364,11 @@ function showHome() {
   const login = $('login');
   const home = $('home');
   const chat = $('chat');
-  const sidebarTab = $('sidebar-tab');
   const homeInput = $('home-input') as HTMLTextAreaElement;
 
   if (login) login.style.display = 'none';
   if (home) home.classList.add('active');
   if (chat) chat.classList.remove('active');
-  if (sidebarTab) sidebarTab.classList.remove('hidden');
   if (homeInput) setTimeout(() => homeInput.focus(), 100);
 }
 
@@ -366,44 +376,266 @@ function showChat() {
   const login = $('login');
   const home = $('home');
   const chat = $('chat');
-  const sidebarTab = $('sidebar-tab');
   const modelBadge = document.querySelector('.model-badge');
 
   if (login) login.style.display = 'none';
   if (home) home.classList.remove('active');
   if (chat) chat.classList.add('active');
-  if (sidebarTab) sidebarTab.classList.remove('hidden');
   if (modelBadge) modelBadge.textContent = modelDisplayNames[selectedModel] || 'Opus 4.5';
 }
 
 // Sidebar functions
+let sidebarWidth = 260;
+const MIN_SIDEBAR_WIDTH = 200;
+const MAX_SIDEBAR_WIDTH = 400;
+
 function toggleSidebar() {
   const sidebar = $('sidebar');
   const overlay = $('sidebar-overlay');
-  const sidebarTab = $('sidebar-tab');
+  const toggleBtns = document.querySelectorAll('.sidebar-toggle-btn');
 
-  if (!sidebar || !overlay || !sidebarTab) return;
+  if (!sidebar || !overlay) return;
 
   const isOpening = !sidebar.classList.contains('open');
   sidebar.classList.toggle('open');
   overlay.classList.toggle('open');
 
+  toggleBtns.forEach(btn => btn.classList.toggle('active', isOpening));
+
   if (isOpening) {
-    sidebarTab.classList.add('hidden');
     loadConversationsList();
-  } else {
-    sidebarTab.classList.remove('hidden');
   }
 }
 
 function closeSidebar() {
   const sidebar = $('sidebar');
   const overlay = $('sidebar-overlay');
-  const sidebarTab = $('sidebar-tab');
+  const toggleBtns = document.querySelectorAll('.sidebar-toggle-btn');
 
   if (sidebar) sidebar.classList.remove('open');
   if (overlay) overlay.classList.remove('open');
-  if (sidebarTab) sidebarTab.classList.remove('hidden');
+  toggleBtns.forEach(btn => btn.classList.remove('active'));
+}
+
+function initSidebarResize() {
+  const sidebar = $('sidebar');
+  const resizeHandle = $('sidebar-resize-handle');
+
+  if (!sidebar || !resizeHandle) return;
+
+  let isResizing = false;
+
+  resizeHandle.addEventListener('mousedown', (e) => {
+    isResizing = true;
+    sidebar.classList.add('resizing');
+    resizeHandle.classList.add('dragging');
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!isResizing) return;
+
+    const newWidth = Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, e.clientX));
+    sidebarWidth = newWidth;
+    sidebar.style.width = newWidth + 'px';
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (isResizing) {
+      isResizing = false;
+      sidebar.classList.remove('resizing');
+      resizeHandle.classList.remove('dragging');
+    }
+  });
+}
+
+// Tab management
+function createTab(convId: string | null = null, title = 'New Chat'): Tab {
+  const tab: Tab = {
+    id: crypto.randomUUID(),
+    conversationId: convId,
+    parentMessageUuid: convId,
+    title,
+    messagesHtml: '',
+    isLoading: false
+  };
+  tabs.push(tab);
+  return tab;
+}
+
+function saveCurrentTabState() {
+  const currentTab = tabs.find(t => t.id === activeTabId);
+  if (currentTab) {
+    currentTab.conversationId = conversationId;
+    currentTab.parentMessageUuid = parentMessageUuid;
+    currentTab.isLoading = isLoading;
+    const messagesEl = $('messages');
+    if (messagesEl) {
+      currentTab.messagesHtml = messagesEl.innerHTML;
+    }
+  }
+}
+
+function restoreTabState(tab: Tab) {
+  conversationId = tab.conversationId;
+  parentMessageUuid = tab.parentMessageUuid;
+  isLoading = tab.isLoading;
+  const messagesEl = $('messages');
+  if (messagesEl) {
+    if (tab.messagesHtml) {
+      messagesEl.innerHTML = tab.messagesHtml;
+    } else {
+      messagesEl.innerHTML = '<div class="empty-state" id="empty-state"><div class="empty-state-icon">✦</div><p>What can I help with?</p><span class="hint">Claude is ready</span></div>';
+    }
+  }
+  currentStreamingElement = null;
+  resetStreamingBlocks();
+}
+
+function switchToTab(tabId: string) {
+  if (tabId === activeTabId) return;
+
+  saveCurrentTabState();
+
+  const tab = tabs.find(t => t.id === tabId);
+  if (!tab) return;
+
+  activeTabId = tabId;
+  restoreTabState(tab);
+  renderTabs();
+}
+
+function closeTab(tabId: string) {
+  const tabIndex = tabs.findIndex(t => t.id === tabId);
+  if (tabIndex === -1) return;
+
+  // Don't allow closing the last tab
+  if (tabs.length === 1) {
+    // Instead, reset the tab to a new conversation
+    tabs[0].conversationId = null;
+    tabs[0].parentMessageUuid = null;
+    tabs[0].title = 'New Chat';
+    tabs[0].messagesHtml = '';
+    tabs[0].isLoading = false;
+    restoreTabState(tabs[0]);
+    renderTabs();
+    return;
+  }
+
+  tabs.splice(tabIndex, 1);
+
+  // If we closed the active tab, switch to another
+  if (tabId === activeTabId) {
+    const newActiveTab = tabs[Math.min(tabIndex, tabs.length - 1)];
+    activeTabId = newActiveTab.id;
+    restoreTabState(newActiveTab);
+  }
+
+  renderTabs();
+}
+
+function updateTabTitle(tabId: string, title: string) {
+  const tab = tabs.find(t => t.id === tabId);
+  if (tab) {
+    tab.title = title;
+    renderTabs();
+  }
+}
+
+function renderTabs() {
+  const container = $('tabs-container');
+  if (!container) return;
+
+  container.innerHTML = tabs.map(tab => `
+    <div class="tab ${tab.id === activeTabId ? 'active' : ''}" data-tab-id="${tab.id}" draggable="true">
+      <span class="tab-title">${escapeHtml(tab.title)}</span>
+      <button class="tab-close" data-tab-id="${tab.id}">✕</button>
+    </div>
+  `).join('');
+
+  // Add event listeners
+  container.querySelectorAll('.tab').forEach(tabEl => {
+    const tabId = (tabEl as HTMLElement).dataset.tabId;
+    if (!tabId) return;
+
+    tabEl.addEventListener('click', (e) => {
+      if (!(e.target as HTMLElement).classList.contains('tab-close')) {
+        switchToTab(tabId);
+      }
+    });
+
+    // Tab dragging
+    tabEl.addEventListener('dragstart', (e) => {
+      (tabEl as HTMLElement).classList.add('dragging');
+      const dragEvent = e as DragEvent;
+      dragEvent.dataTransfer?.setData('text/plain', tabId);
+      dragEvent.dataTransfer?.setData('application/x-tab-id', tabId);
+    });
+
+    tabEl.addEventListener('dragend', async (e) => {
+      (tabEl as HTMLElement).classList.remove('dragging');
+
+      // Check if dragged outside the tab bar (to create new window)
+      const dragEvent = e as DragEvent;
+      const tabBar = $('tab-bar');
+      if (tabBar && tabs.length > 1) {
+        const tabBarRect = tabBar.getBoundingClientRect();
+        const isOutsideTabBar = dragEvent.clientY > tabBarRect.bottom + 50 ||
+                                dragEvent.clientY < tabBarRect.top - 50 ||
+                                dragEvent.clientX < tabBarRect.left - 50 ||
+                                dragEvent.clientX > tabBarRect.right + 50;
+
+        if (isOutsideTabBar) {
+          const tab = tabs.find(t => t.id === tabId);
+          if (tab) {
+            // Detach tab to new window
+            await window.claude.detachTab({
+              conversationId: tab.conversationId,
+              title: tab.title
+            });
+
+            // Remove the tab from this window
+            closeTab(tabId);
+          }
+        }
+      }
+    });
+  });
+
+  container.querySelectorAll('.tab-close').forEach(btn => {
+    const tabId = (btn as HTMLElement).dataset.tabId;
+    if (tabId) {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeTab(tabId);
+      });
+    }
+  });
+}
+
+function newTab() {
+  saveCurrentTabState();
+  const tab = createTab();
+  activeTabId = tab.id;
+  conversationId = null;
+  parentMessageUuid = null;
+  isLoading = false;
+  currentStreamingElement = null;
+  resetStreamingBlocks();
+
+  const messagesEl = $('messages');
+  if (messagesEl) {
+    messagesEl.innerHTML = '<div class="empty-state" id="empty-state"><div class="empty-state-icon">✦</div><p>What can I help with?</p><span class="hint">Claude is ready</span></div>';
+  }
+
+  renderTabs();
+}
+
+function initTabs() {
+  // Create initial tab
+  const tab = createTab();
+  activeTabId = tab.id;
+  renderTabs();
 }
 
 // Model selection
@@ -1194,6 +1426,18 @@ async function loadConversation(convId: string) {
     const conv = await window.claude.loadConversation(convId);
     conversationId = convId;
 
+    // Update current tab with this conversation
+    const currentTab = tabs.find(t => t.id === activeTabId);
+    if (currentTab) {
+      currentTab.conversationId = convId;
+      // Get conversation name from sidebar list
+      const convInfo = conversations.find(c => c.uuid === convId);
+      if (convInfo) {
+        currentTab.title = convInfo.name || convInfo.summary || 'New Chat';
+        renderTabs();
+      }
+    }
+
     isLoading = false;
     const sendBtn = $('send-btn');
     const stopBtn = $('stop-btn');
@@ -1297,9 +1541,21 @@ async function startNewConversation() {
 }
 
 function newChat() {
+  // Reset current tab state
   conversationId = null;
   parentMessageUuid = null;
   clearAttachments();
+
+  // Update current tab
+  const currentTab = tabs.find(t => t.id === activeTabId);
+  if (currentTab) {
+    currentTab.conversationId = null;
+    currentTab.parentMessageUuid = null;
+    currentTab.title = 'New Chat';
+    currentTab.messagesHtml = '';
+    renderTabs();
+  }
+
   const homeInput = $('home-input') as HTMLTextAreaElement;
   if (homeInput) homeInput.value = '';
   closeSidebar();
@@ -1346,9 +1602,6 @@ async function sendFromHome() {
     const modelBadge = document.querySelector('.model-badge');
     if (modelBadge) modelBadge.textContent = modelDisplayNames[selectedModel] || 'Opus 4.5';
 
-    const sidebarTab = $('sidebar-tab');
-    if (sidebarTab) sidebarTab.classList.remove('hidden');
-
     addMessage('user', msg, false, null, 'fly-in', userAttachmentCopies);
 
     await new Promise(resolve => setTimeout(resolve, 200));
@@ -1369,8 +1622,13 @@ async function sendFromHome() {
 
     clearAttachments();
 
-    window.claude.generateTitle(conversationId, msg).then(() => {
-      loadConversationsList();
+    window.claude.generateTitle(conversationId, msg).then(async () => {
+      await loadConversationsList();
+      // Update tab title from conversation
+      const conv = conversations.find(c => c.uuid === conversationId);
+      if (conv && activeTabId) {
+        updateTabTitle(activeTabId, conv.name || conv.summary || 'New Chat');
+      }
     }).catch(err => {
       console.warn('Failed to generate title:', err);
       loadConversationsList();
@@ -1482,6 +1740,21 @@ async function stopGenerating() {
 
 // Initialize
 async function init() {
+  // Initialize tabs
+  initTabs();
+
+  // Listen for tabs received from other windows
+  window.claude.onReceiveTab(async (data) => {
+    // Create a new tab with the received conversation
+    const tab = createTab(data.conversationId, data.title);
+    activeTabId = tab.id;
+    renderTabs();
+
+    if (data.conversationId) {
+      await loadConversation(data.conversationId);
+    }
+  });
+
   if (await window.claude.getAuthStatus()) {
     showHome();
     loadConversationsList();
@@ -1595,9 +1868,21 @@ function setupEventListeners() {
     window.claude.openSettings();
   });
 
-  // Sidebar toggle
-  $('sidebar-tab')?.addEventListener('click', toggleSidebar);
+  // Sidebar toggle buttons
+  $('sidebar-toggle-btn')?.addEventListener('click', toggleSidebar);
+  $('home-sidebar-toggle-btn')?.addEventListener('click', toggleSidebar);
   $('sidebar-overlay')?.addEventListener('click', closeSidebar);
+
+  // Initialize sidebar resize
+  initSidebarResize();
+
+  // New tab button
+  $('new-tab-btn')?.addEventListener('click', newTab);
+
+  // New window button
+  $('new-window-btn')?.addEventListener('click', async () => {
+    await window.claude.newWindow();
+  });
 
   // Model selection
   $$('.model-option').forEach(btn => {
@@ -1659,26 +1944,6 @@ function setupEventListeners() {
     }
   });
 
-  // Sidebar tab indicator
-  const sidebarTab = $('sidebar-tab');
-  const sidebarTabIndicator = $('sidebar-tab-indicator');
-  sidebarTab?.addEventListener('mousemove', (e) => {
-    if (!sidebarTabIndicator || !sidebarTab) return;
-    const rect = sidebarTab.getBoundingClientRect();
-    const relativeY = e.clientY - rect.top;
-    sidebarTabIndicator.style.top = relativeY + 'px';
-  });
-
-  // Sidebar hover to open
-  let hoverTimeout: number;
-  sidebarTab?.addEventListener('mouseenter', () => {
-    hoverTimeout = window.setTimeout(() => {
-      toggleSidebar();
-    }, 200);
-  });
-  sidebarTab?.addEventListener('mouseleave', () => {
-    clearTimeout(hoverTimeout);
-  });
 }
 
 // Start the app
