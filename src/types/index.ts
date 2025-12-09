@@ -1,7 +1,15 @@
+// Keyboard shortcuts configuration
+export interface KeyboardShortcuts {
+  spotlight: string;
+  newConversation: string;
+  toggleSidebar: string;
+}
+
 // Settings schema
 export interface SettingsSchema {
   spotlightKeybind: string;
   spotlightPersistHistory: boolean;
+  keyboardShortcuts: KeyboardShortcuts;
 }
 
 // Store schema for electron-store

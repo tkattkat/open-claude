@@ -27,6 +27,8 @@ declare global {
       onMessageToolResult: (callback: (data: ToolResultData) => void) => void;
       onMessageStream: (callback: (data: StreamData) => void) => void;
       onMessageComplete: (callback: (data: CompleteData) => void) => void;
+      onNewConversation: (callback: () => void) => void;
+      onToggleSidebar: (callback: () => void) => void;
     };
   }
 }
@@ -1690,6 +1692,15 @@ async function init() {
       const inputEl = $('input');
       if (inputEl) inputEl.focus();
     }
+  });
+
+  // Global keyboard shortcut handlers
+  window.claude.onNewConversation(() => {
+    newChat();
+  });
+
+  window.claude.onToggleSidebar(() => {
+    toggleSidebar();
   });
 }
 

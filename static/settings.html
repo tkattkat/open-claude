@@ -13,20 +13,47 @@
     </div>
 
     <div class="settings-content">
-      <!-- Spotlight Section -->
+      <!-- Keyboard Shortcuts Section -->
       <div class="settings-section">
-        <h2>Spotlight</h2>
+        <h2>Keyboard Shortcuts</h2>
 
         <div class="setting-item">
           <div class="setting-info">
-            <label>Keyboard Shortcut</label>
-            <span class="setting-description">Global shortcut to open spotlight</span>
+            <label>Open Spotlight</label>
+            <span class="setting-description">Global shortcut to open spotlight search</span>
           </div>
-          <div class="keybind-input" id="keybind-input" tabindex="0">
-            <span class="keybind-display" id="keybind-display">⌘ + Shift + Space</span>
+          <div class="keybind-input" id="spotlight-keybind-input" tabindex="0" data-shortcut="spotlight">
+            <span class="keybind-display" id="spotlight-keybind-display">Loading...</span>
             <span class="keybind-hint">Click to change</span>
           </div>
         </div>
+
+        <div class="setting-item">
+          <div class="setting-info">
+            <label>New Conversation</label>
+            <span class="setting-description">Global shortcut to start a new conversation</span>
+          </div>
+          <div class="keybind-input" id="new-conv-keybind-input" tabindex="0" data-shortcut="newConversation">
+            <span class="keybind-display" id="new-conv-keybind-display">Loading...</span>
+            <span class="keybind-hint">Click to change</span>
+          </div>
+        </div>
+
+        <div class="setting-item">
+          <div class="setting-info">
+            <label>Toggle Sidebar</label>
+            <span class="setting-description">Global shortcut to toggle the sidebar</span>
+          </div>
+          <div class="keybind-input" id="sidebar-keybind-input" tabindex="0" data-shortcut="toggleSidebar">
+            <span class="keybind-display" id="sidebar-keybind-display">Loading...</span>
+            <span class="keybind-hint">Click to change</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Spotlight Section -->
+      <div class="settings-section">
+        <h2>Spotlight</h2>
 
         <div class="setting-item">
           <div class="setting-info">
