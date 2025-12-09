@@ -1,4 +1,5 @@
-import { app, BrowserWindow, ipcMain, session, globalShortcut, screen } from 'electron';
+import { app, BrowserWindow, ipcMain, session, globalShortcut, screen, dialog } from 'electron';
+import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { isAuthenticated, getOrgId, makeRequest, streamCompletion, stopResponse, generateTitle, store, BASE_URL, prepareAttachmentPayload } from './api/client';
@@ -56,16 +57,22 @@ function createSpotlightWindow() {
   const primaryDisplay = screen.getPrimaryDisplay();
   const { width: screenWidth } = primaryDisplay.workAreaSize;
 
+  const isMac = process.platform === 'darwin';
+
   spotlightWindow = new BrowserWindow({
     width: 600,
     height: 56,
     x: Math.round((screenWidth - 600) / 2),
     y: 180,
     frame: false,
-    transparent: true,
-    vibrancy: 'under-window',
-    visualEffectState: 'active',
-    backgroundColor: '#00000000',
+    transparent: isMac,
+    ...(isMac ? {
+      vibrancy: 'under-window',
+      visualEffectState: 'active',
+      backgroundColor: '#00000000',
+    } : {
+      backgroundColor: '#1a1a1a',
+    }),
     resizable: false,
     movable: true,
     minimizable: false,
@@ -95,20 +102,26 @@ function createSpotlightWindow() {
 }
 
 function createMainWindow() {
+  const isMac = process.platform === 'darwin';
+
   mainWindow = new BrowserWindow({
     width: 900,
     height: 700,
-    transparent: true,
-    vibrancy: 'under-window',
-    visualEffectState: 'active',
-    backgroundColor: '#00000000',
+    ...(isMac ? {
+      transparent: true,
+      vibrancy: 'under-window',
+      visualEffectState: 'active',
+      backgroundColor: '#00000000',
+      titleBarStyle: 'hiddenInset',
+      trafficLightPosition: { x: 16, y: 16 },
+    } : {
+      backgroundColor: '#1a1a1a',
+    }),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
     },
-    titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 16, y: 16 },
   });
 
   mainWindow.loadFile(path.join(__dirname, '../static/index.html'));
@@ -121,22 +134,28 @@ function createSettingsWindow() {
     return;
   }
 
+  const isMac = process.platform === 'darwin';
+
   settingsWindow = new BrowserWindow({
     width: 480,
     height: 520,
     minWidth: 400,
     minHeight: 400,
-    transparent: true,
-    vibrancy: 'under-window',
-    visualEffectState: 'active',
-    backgroundColor: '#00000000',
+    ...(isMac ? {
+      transparent: true,
+      vibrancy: 'under-window',
+      visualEffectState: 'active',
+      backgroundColor: '#00000000',
+      titleBarStyle: 'hiddenInset',
+      trafficLightPosition: { x: 16, y: 16 },
+    } : {
+      backgroundColor: '#1a1a1a',
+    }),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
     },
-    titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 16, y: 16 },
   });
 
   settingsWindow.loadFile(path.join(__dirname, '../static/settings.html'));
@@ -356,7 +375,7 @@ ipcMain.handle('get-conversations', async () => {
   const orgId = await getOrgId();
   if (!orgId) throw new Error('Not authenticated');
 
-  const url = `${BASE_URL}/api/organizations/${orgId}/chat_conversations?limit=30&starred=false&consistency=eventual`;
+  const url = `${BASE_URL}/api/organizations/${orgId}/chat_conversations?limit=30&consistency=eventual`;
   const result = await makeRequest(url, 'GET');
 
   if (result.status !== 200) {
@@ -419,11 +438,50 @@ ipcMain.handle('star-conversation', async (_event, convId: string, isStarred: bo
   const url = `${BASE_URL}/api/organizations/${orgId}/chat_conversations/${convId}?rendering_mode=raw`;
   const result = await makeRequest(url, 'PUT', { is_starred: isStarred });
 
-  if (result.status !== 200) {
+  if (result.status !== 202) {
     throw new Error(`Failed to star conversation: ${result.status}`);
   }
 
   return result.data;
+});
+
+// Export conversation to Markdown
+ipcMain.handle('export-conversation-markdown', async (_event, conversationData: { title: string; messages: Array<{ role: string; content: string; timestamp?: string }> }) => {
+  const { title, messages } = conversationData;
+
+  // Build markdown content
+  let markdown = `# ${title || 'Conversation'}\n\n`;
+  markdown += `_Exported on ${new Date().toLocaleString()}_\n\n---\n\n`;
+
+  for (const msg of messages) {
+    const role = msg.role === 'human' ? 'You' : 'Claude';
+    const timestamp = msg.timestamp ? ` _(${new Date(msg.timestamp).toLocaleString()})_` : '';
+    markdown += `## ${role}${timestamp}\n\n`;
+    markdown += `${msg.content}\n\n---\n\n`;
+  }
+
+  // Show save dialog
+  const result = await dialog.showSaveDialog(mainWindow!, {
+    title: 'Export Conversation',
+    defaultPath: `${title || 'conversation'}.md`,
+    filters: [
+      { name: 'Markdown', extensions: ['md'] },
+      { name: 'All Files', extensions: ['*'] }
+    ]
+  });
+
+  if (result.canceled || !result.filePath) {
+    return { success: false, canceled: true };
+  }
+
+  // Write file
+  try {
+    fs.writeFileSync(result.filePath, markdown, 'utf-8');
+    return { success: true, filePath: result.filePath };
+  } catch (error) {
+    console.error('Failed to write file:', error);
+    return { success: false, error: 'Failed to write file' };
+  }
 });
 
 // Upload file attachments (prepare metadata only)

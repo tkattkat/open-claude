@@ -37,6 +37,19 @@
     "dmg": {
       "title": "Open Claude",
       "icon": "build/icon.icns"
+    },
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
     }
   },
   "keywords": [],

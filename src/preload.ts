@@ -10,6 +10,8 @@ contextBridge.exposeInMainWorld('claude', {
   deleteConversation: (convId: string) => ipcRenderer.invoke('delete-conversation', convId),
   renameConversation: (convId: string, name: string) => ipcRenderer.invoke('rename-conversation', convId, name),
   starConversation: (convId: string, isStarred: boolean) => ipcRenderer.invoke('star-conversation', convId, isStarred),
+  exportConversationMarkdown: (conversationData: { title: string; messages: Array<{ role: string; content: string; timestamp?: string }> }) =>
+    ipcRenderer.invoke('export-conversation-markdown', conversationData),
   generateTitle: (convId: string, messageContent: string, recentTitles?: string[]) => ipcRenderer.invoke('generate-title', convId, messageContent, recentTitles || []),
   sendMessage: (conversationId: string, message: string, parentMessageUuid: string, attachments?: unknown[]) =>
     ipcRenderer.invoke('send-message', conversationId, message, parentMessageUuid, attachments || []),
