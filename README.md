@@ -1,6 +1,5 @@
 # Open Claude
-
-A native macOS desktop client for Claude with a clean, minimal interface and system-wide quick access.
+A native desktop client for Claude with a clean, minimal interface and system-wide quick access.
 
 ## Disclaimer
 
@@ -21,7 +20,7 @@ This software is provided "as is" for educational and personal productivity purp
 - Dark mode support
 
 ### Spotlight Search
-Press `Cmd+Shift+C` from anywhere to open a floating Spotlight-style search bar. Ask quick questions without leaving your current workflow.
+Press `Cmd+Shift+C` or `Ctrl+Shift+C` from anywhere to open a floating Spotlight-style search bar. Ask quick questions without leaving your current workflow.
 
 - Always-on-top floating window
 - Closes automatically when clicking outside
@@ -70,6 +69,15 @@ pnpm dev
 # Build from source to desktop app
 pnpm dist
 ```
+
+### Linux Support
+For Xserver:
+- All functionality is supported. The application will just be minimized to your system tray and then listen for keyboard shortcuts. 
+
+For Wayland:
+- Due to most compositors not giving great support for the shortcuts api we have disabled support for shortcuts on Wayland. Simply add shortcuts to your compositors config, and use the `--spotlight` flag for spotlight mode and `--settings` for settings mode.
+
+Appimage and .deb files are available with every release, just download the one you need or grab it from the `release/` directory when building from soruce. 
 
 ## Authentication
 

@@ -1,5 +1,4 @@
-import { app, BrowserWindow, ipcMain, session, globalShortcut, screen, dialog } from 'electron';
-import fs from 'fs';
+import { app, BrowserWindow, ipcMain, session, globalShortcut, screen, Tray, menu, dialog } from 'electron';
 import path from 'path';
 import crypto from 'crypto';
 import { isAuthenticated, getOrgId, makeRequest, streamCompletion, stopResponse, generateTitle, store, BASE_URL, prepareAttachmentPayload } from './api/client';
@@ -12,438 +11,527 @@ let settingsWindow: BrowserWindow | null = null;
 
 // Default settings
 const DEFAULT_SETTINGS: SettingsSchema = {
-  spotlightKeybind: 'CommandOrControl+Shift+C',
-  spotlightPersistHistory: true,
+	spotlightKeybind: "CommandOrControl+Shift+C",
+	spotlightPersistHistory: true,
 };
+
+// Wayland detection to stop shortcuts since most compositors won't work with the shortcuts api
+const isWayland = process.env.XDG_SESSION_TYPE === "wayland";
 
 // Get settings with defaults
 function getSettings(): SettingsSchema {
-  const stored = store.get('settings');
-  return { ...DEFAULT_SETTINGS, ...stored };
+	const stored = store.get("settings");
+	return { ...DEFAULT_SETTINGS, ...stored };
 }
 
 // Save settings
 function saveSettings(settings: Partial<SettingsSchema>) {
-  const current = getSettings();
-  store.set('settings', { ...current, ...settings });
+	const current = getSettings();
+	store.set("settings", { ...current, ...settings });
 }
 
 // Register spotlight shortcut
 function registerSpotlightShortcut() {
-  globalShortcut.unregisterAll();
-  const settings = getSettings();
-  const keybind = settings.spotlightKeybind || DEFAULT_SETTINGS.spotlightKeybind;
+	// Skip on wayland - shortcuts must be configured in compositor
+	if (isWayland) {
+		console.log(
+			"[Shortcuts] Running on Wayland - configure shortcuts in your compositor config",
+		);
+		console.log(
+			'[Shortcuts] Example for Niri: Mod+Shift+C { spawn "open-claude" "--spotlight"; }',
+		);
+		return;
+	}
 
-  try {
-    globalShortcut.register(keybind, () => {
-      createSpotlightWindow();
-    });
-  } catch (e) {
-    // Fallback to default if custom keybind fails
-    console.error('Failed to register keybind:', keybind, e);
-    globalShortcut.register(DEFAULT_SETTINGS.spotlightKeybind, () => {
-      createSpotlightWindow();
-    });
-  }
+	globalShortcut.unregisterAll();
+	const settings = getSettings();
+	const keybind =
+		settings.spotlightKeybind || DEFAULT_SETTINGS.spotlightKeybind;
+
+	try {
+		globalShortcut.register(keybind, () => {
+			createSpotlightWindow();
+		});
+	} catch (e) {
+		// Fallback to default if custom keybind fails
+		console.error("Failed to register keybind:", keybind, e);
+		globalShortcut.register(DEFAULT_SETTINGS.spotlightKeybind, () => {
+			createSpotlightWindow();
+		});
+	}
 }
 
 // Create spotlight search window
 function createSpotlightWindow() {
-  if (spotlightWindow && !spotlightWindow.isDestroyed()) {
-    spotlightWindow.focus();
-    return;
-  }
 
-  const primaryDisplay = screen.getPrimaryDisplay();
-  const { width: screenWidth } = primaryDisplay.workAreaSize;
+    Dynamic Power: P_dyn = C × V² × f × α
+        C = capacitive load, V = voltage, f = frequency, α = activity factor
+    Static Power: P_stat = V × I_leak
+    Total Power: P_total = P_dyn + P_stat
+	if (spotlightWindow && !spotlightWindow.isDestroyed()) {
+		spotlightWindow.focus();
+		return;
+	}
 
-  const isMac = process.platform === 'darwin';
+	const primaryDisplay = screen.getPrimaryDisplay();
+	const { width: screenWidth } = primaryDisplay.workAreaSize;
 
-  spotlightWindow = new BrowserWindow({
-    width: 600,
-    height: 56,
-    x: Math.round((screenWidth - 600) / 2),
-    y: 180,
-    frame: false,
-    transparent: isMac,
-    ...(isMac ? {
-      vibrancy: 'under-window',
-      visualEffectState: 'active',
-      backgroundColor: '#00000000',
-    } : {
-      backgroundColor: '#1a1a1a',
-    }),
-    resizable: false,
-    movable: true,
-    minimizable: false,
-    maximizable: false,
-    closable: true,
-    alwaysOnTop: true,
-    skipTaskbar: true,
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-    },
-  });
+	spotlightWindow = new BrowserWindow({
+		width: 600,
+		height: 56,
+		x: Math.round((screenWidth - 600) / 2),
+		y: 180,
+		frame: false,
+		...(process.platform === "darwin" && {
+			transparent: true,
+			vibrancy: "under-window",
+			visualEffectState: "active",
+		}),
+		backgroundColor: "#000000",
+		resizable: false,
+		movable: true,
+		minimizable: false,
+		maximizable: false,
+		closable: true,
+		alwaysOnTop: true,
+		skipTaskbar: true,
+		webPreferences: {
+			preload: path.join(__dirname, "preload.js"),
+			contextIsolation: true,
+			nodeIntegration: false,
+		},
+	});
 
-  spotlightWindow.loadFile(path.join(__dirname, '../static/spotlight.html'));
+	spotlightWindow.loadFile(path.join(__dirname, "../static/spotlight.html"));
 
-  // Close on blur (clicking outside)
-  spotlightWindow.on('blur', () => {
-    if (spotlightWindow && !spotlightWindow.isDestroyed()) {
-      spotlightWindow.close();
-    }
-  });
+	// Close on blur (clicking outside)
+	spotlightWindow.on("blur", () => {
+		if (spotlightWindow && !spotlightWindow.isDestroyed()) {
+			spotlightWindow.close();
+		}
+	});
 
-  spotlightWindow.on('closed', () => {
-    spotlightWindow = null;
-  });
+	spotlightWindow.on("closed", () => {
+		spotlightWindow = null;
+	});
 }
 
 function createMainWindow() {
-  const isMac = process.platform === 'darwin';
+	mainWindow = new BrowserWindow({
+		width: 900,
+		height: 700,
+		...(process.platform === "darwin" && {
+			transparent: true,
+			vibrancy: "under-window",
+			visualEffectState: "active",
+			trafficLightPosition: { x: 16, y: 16 },
+		}),
+		backgroundColor: "#000000",
+		webPreferences: {
+			preload: path.join(__dirname, "preload.js"),
+			contextIsolation: true,
+			nodeIntegration: false,
+		},
+		titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
+	});
 
-  mainWindow = new BrowserWindow({
-    width: 900,
-    height: 700,
-    ...(isMac ? {
-      transparent: true,
-      vibrancy: 'under-window',
-      visualEffectState: 'active',
-      backgroundColor: '#00000000',
-      titleBarStyle: 'hiddenInset',
-      trafficLightPosition: { x: 16, y: 16 },
-    } : {
-      backgroundColor: '#1a1a1a',
-    }),
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-    },
-  });
+	mainWindow.loadFile(path.join(__dirname, "../static/index.html"));
 
-  mainWindow.loadFile(path.join(__dirname, '../static/index.html'));
+	if (process.platform !== "darwin") {
+		mainWindow.setMenuBarVisibility(false);
+	}
 }
 
 // Create settings window
 function createSettingsWindow() {
-  if (settingsWindow && !settingsWindow.isDestroyed()) {
-    settingsWindow.focus();
-    return;
-  }
+	if (settingsWindow && !settingsWindow.isDestroyed()) {
+		settingsWindow.focus();
+		return;
+	}
 
-  const isMac = process.platform === 'darwin';
+	settingsWindow = new BrowserWindow({
+		width: 480,
+		height: 520,
+		minWidth: 400,
+		minHeight: 400,
+		...(process.platform === "darwin" && {
+			transparent: true,
+			vibrancy: "under-window",
+			visualEffectState: "active",
+			trafficLightPosition: { x: 16, y: 16 },
+		}),
+		titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
+		backgroundColor: "#000000",
+		webPreferences: {
+			preload: path.join(__dirname, "preload.js"),
+			contextIsolation: true,
+			nodeIntegration: false,
+		},
+	});
 
-  settingsWindow = new BrowserWindow({
-    width: 480,
-    height: 520,
-    minWidth: 400,
-    minHeight: 400,
-    ...(isMac ? {
-      transparent: true,
-      vibrancy: 'under-window',
-      visualEffectState: 'active',
-      backgroundColor: '#00000000',
-      titleBarStyle: 'hiddenInset',
-      trafficLightPosition: { x: 16, y: 16 },
-    } : {
-      backgroundColor: '#1a1a1a',
-    }),
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-    },
-  });
+	settingsWindow.loadFile(path.join(__dirname, "../static/settings.html"));
 
-  settingsWindow.loadFile(path.join(__dirname, '../static/settings.html'));
-
-  settingsWindow.on('closed', () => {
-    settingsWindow = null;
-  });
+	if (process.platform !== "darwin") {
+		settingsWindow.setMenuBarVisibility(false);
+	}
+	settingsWindow.on("closed", () => {
+		settingsWindow = null;
+	});
 }
 
 // IPC handlers
 
-// Spotlight window resize
-ipcMain.handle('spotlight-resize', async (_event, height: number) => {
-  if (spotlightWindow && !spotlightWindow.isDestroyed()) {
-    const maxHeight = 700;
-    const newHeight = Math.min(height, maxHeight);
-    spotlightWindow.setSize(600, newHeight);
-  }
+// Keeps spotlight window centered, fixes hardcoded value that allowed window
+// to come off the screen with low resolutions
+ipcMain.handle("spotlight-resize", async (_event, height: number) => {
+	if (spotlightWindow && !spotlightWindow.isDestroyed()) {
+		const primaryDisplay = screen.getPrimaryDisplay();
+		const { width: screenWidth, height: screenHeight } =
+			primaryDisplay.workAreaSize;
+
+		// Hard cap at exactly 45% of screen height
+		const maxHeight = Math.floor(screenHeight * .45);
+		const newHeight = Math.min(height, maxHeight);
+
+		// Center both horizontally and vertically
+		const newX = Math.round((screenWidth - 600) / 2);
+		const newY = Math.round((screenHeight - newHeight) / 2);
+
+		spotlightWindow.setBounds({
+			x: newX,
+			y: newY,
+			width: 600,
+			height: newHeight,
+		});
+	}
 });
 
 // Spotlight conversation state
 let spotlightConversationId: string | null = null;
 let spotlightParentMessageUuid: string | null = null;
-let spotlightMessages: Array<{ role: 'user' | 'assistant'; text: string }> = [];
+let spotlightMessages: Array<{ role: "user" | "assistant"; text: string }> = [];
 
 // Spotlight send message (uses Haiku)
-ipcMain.handle('spotlight-send', async (_event, message: string) => {
-  const orgId = await getOrgId();
-  if (!orgId) throw new Error('Not authenticated');
+ipcMain.handle("spotlight-send", async (_event, message: string) => {
+	const orgId = await getOrgId();
+	if (!orgId) throw new Error("Not authenticated");
 
-  if (!spotlightConversationId) {
-    const createResult = await makeRequest(
-      `${BASE_URL}/api/organizations/${orgId}/chat_conversations`,
-      'POST',
-      { name: '', model: 'claude-haiku-4-5-20251001' }
-    );
+	if (!spotlightConversationId) {
+		const createResult = await makeRequest(
+			`${BASE_URL}/api/organizations/${orgId}/chat_conversations`,
+			"POST",
+			{ name: "", model: "claude-haiku-4-5-20251001" },
+		);
 
-    if (createResult.status !== 201 && createResult.status !== 200) {
-      throw new Error('Failed to create conversation');
-    }
+		if (createResult.status !== 201 && createResult.status !== 200) {
+			throw new Error("Failed to create conversation");
+		}
 
-    const convData = createResult.data as { uuid: string };
-    spotlightConversationId = convData.uuid;
-    spotlightParentMessageUuid = null;
-  }
+		const convData = createResult.data as { uuid: string };
+		spotlightConversationId = convData.uuid;
+		spotlightParentMessageUuid = null;
+	}
 
-  const conversationId = spotlightConversationId;
-  const parentMessageUuid = spotlightParentMessageUuid || conversationId;
+	const conversationId = spotlightConversationId;
+	const parentMessageUuid = spotlightParentMessageUuid || conversationId;
 
-  // Store user message
-  spotlightMessages.push({ role: 'user', text: message });
+	// Store user message
+	spotlightMessages.push({ role: "user", text: message });
 
-  const state = createStreamState();
+	const state = createStreamState();
 
-  const callbacks: StreamCallbacks = {
-    onTextDelta: (text, fullText) => {
-      spotlightWindow?.webContents.send('spotlight-stream', { text, fullText });
-    },
-    onThinkingStart: () => {
-      spotlightWindow?.webContents.send('spotlight-thinking', { isThinking: true });
-    },
-    onThinkingDelta: (thinking) => {
-      spotlightWindow?.webContents.send('spotlight-thinking-stream', { thinking });
-    },
-    onThinkingStop: (thinkingText) => {
-      spotlightWindow?.webContents.send('spotlight-thinking', { isThinking: false, thinkingText });
-    },
-    onToolStart: (toolName, msg) => {
-      spotlightWindow?.webContents.send('spotlight-tool', { toolName, isRunning: true, message: msg });
-    },
-    onToolStop: (toolName, input) => {
-      spotlightWindow?.webContents.send('spotlight-tool', { toolName, isRunning: false, input });
-    },
-    onToolResult: (toolName, result, isError) => {
-      spotlightWindow?.webContents.send('spotlight-tool-result', { toolName, isError, result });
-    },
-    onComplete: (fullText, _steps, messageUuid) => {
-      // Store assistant response
-      spotlightMessages.push({ role: 'assistant', text: fullText });
-      spotlightWindow?.webContents.send('spotlight-complete', { fullText, messageUuid });
-    }
-  };
+	const callbacks: StreamCallbacks = {
+		onTextDelta: (text, fullText) => {
+			spotlightWindow?.webContents.send("spotlight-stream", { text, fullText });
+		},
+		onThinkingStart: () => {
+			spotlightWindow?.webContents.send("spotlight-thinking", {
+				isThinking: true,
+			});
+		},
+		onThinkingDelta: (thinking) => {
+			spotlightWindow?.webContents.send("spotlight-thinking-stream", {
+				thinking,
+			});
+		},
+		onThinkingStop: (thinkingText) => {
+			spotlightWindow?.webContents.send("spotlight-thinking", {
+				isThinking: false,
+				thinkingText,
+			});
+		},
+		onToolStart: (toolName, msg) => {
+			spotlightWindow?.webContents.send("spotlight-tool", {
+				toolName,
+				isRunning: true,
+				message: msg,
+			});
+		},
+		onToolStop: (toolName, input) => {
+			spotlightWindow?.webContents.send("spotlight-tool", {
+				toolName,
+				isRunning: false,
+				input,
+			});
+		},
+		onToolResult: (toolName, result, isError) => {
+			spotlightWindow?.webContents.send("spotlight-tool-result", {
+				toolName,
+				isError,
+				result,
+			});
+		},
+		onComplete: (fullText, _steps, messageUuid) => {
+			// Store assistant response
+			spotlightMessages.push({ role: "assistant", text: fullText });
+			spotlightWindow?.webContents.send("spotlight-complete", {
+				fullText,
+				messageUuid,
+			});
+		},
+	};
 
-  await streamCompletion(orgId, conversationId, message, parentMessageUuid, (chunk) => {
-    processSSEChunk(chunk, state, callbacks);
-  });
+	await streamCompletion(
+		orgId,
+		conversationId,
+		message,
+		parentMessageUuid,
+		(chunk) => {
+			processSSEChunk(chunk, state, callbacks);
+		},
+	);
 
-  if (state.lastMessageUuid) {
-    spotlightParentMessageUuid = state.lastMessageUuid;
-  }
+	if (state.lastMessageUuid) {
+		spotlightParentMessageUuid = state.lastMessageUuid;
+	}
 
-  return { conversationId, fullText: state.fullResponse, messageUuid: state.lastMessageUuid };
+	return {
+		conversationId,
+		fullText: state.fullResponse,
+		messageUuid: state.lastMessageUuid,
+	};
 });
 
 // Reset spotlight conversation when window is closed
-ipcMain.handle('spotlight-reset', async () => {
-  const settings = getSettings();
-  // Only reset if persist history is disabled
-  if (!settings.spotlightPersistHistory) {
-    spotlightConversationId = null;
-    spotlightParentMessageUuid = null;
-    spotlightMessages = [];
-  }
+ipcMain.handle("spotlight-reset", async () => {
+	const settings = getSettings();
+	// Only reset if persist history is disabled
+	if (!settings.spotlightPersistHistory) {
+		spotlightConversationId = null;
+		spotlightParentMessageUuid = null;
+		spotlightMessages = [];
+	}
 });
 
 // Get spotlight conversation history from local state
-ipcMain.handle('spotlight-get-history', async () => {
-  const settings = getSettings();
-  if (!settings.spotlightPersistHistory || spotlightMessages.length === 0) {
-    return { hasHistory: false, messages: [] };
-  }
+ipcMain.handle("spotlight-get-history", async () => {
+	const settings = getSettings();
+	if (!settings.spotlightPersistHistory || spotlightMessages.length === 0) {
+		return { hasHistory: false, messages: [] };
+	}
 
-  return { hasHistory: true, messages: spotlightMessages };
+	return { hasHistory: true, messages: spotlightMessages };
 });
 
 // Force new spotlight conversation
-ipcMain.handle('spotlight-new-chat', async () => {
-  spotlightConversationId = null;
-  spotlightParentMessageUuid = null;
-  spotlightMessages = [];
+ipcMain.handle("spotlight-new-chat", async () => {
+	spotlightConversationId = null;
+	spotlightParentMessageUuid = null;
+	spotlightMessages = [];
 });
 
-ipcMain.handle('get-auth-status', async () => {
-  return isAuthenticated();
+ipcMain.handle("get-auth-status", async () => {
+	return isAuthenticated();
 });
 
-ipcMain.handle('login', async () => {
-  const authWindow = new BrowserWindow({
-    width: 500,
-    height: 700,
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-    },
-    title: 'Sign in to Claude',
-  });
+ipcMain.handle("login", async () => {
+	const authWindow = new BrowserWindow({
+		width: 500,
+		height: 700,
+		webPreferences: {
+			nodeIntegration: false,
+			contextIsolation: true,
+		},
+		title: "Sign in to Claude",
+	});
 
-  authWindow.loadURL(`${BASE_URL}/login`);
+	authWindow.loadURL(`${BASE_URL}/login`);
 
-  const checkCookies = async (): Promise<{ success: boolean; error?: string } | null> => {
-    const cookies = await session.defaultSession.cookies.get({ domain: '.claude.ai' });
-    const sessionKey = cookies.find(c => c.name === 'sessionKey')?.value;
-    const orgId = cookies.find(c => c.name === 'lastActiveOrg')?.value;
+	const checkCookies = async (): Promise<{
+		success: boolean;
+		error?: string;
+	} | null> => {
+		const cookies = await session.defaultSession.cookies.get({
+			domain: ".claude.ai",
+		});
+		const sessionKey = cookies.find((c) => c.name === "sessionKey")?.value;
+		const orgId = cookies.find((c) => c.name === "lastActiveOrg")?.value;
 
-    if (sessionKey && orgId) {
-      console.log('[Auth] Got cookies from webview!');
-      authWindow.close();
-      store.set('orgId', orgId);
-      return { success: true };
-    }
-    return null;
-  };
+		if (sessionKey && orgId) {
+			console.log("[Auth] Got cookies from webview!");
+			authWindow.close();
+			store.set("orgId", orgId);
+			return { success: true };
+		}
+		return null;
+	};
 
-  return new Promise((resolve) => {
-    authWindow.webContents.on('did-finish-load', async () => {
-      const result = await checkCookies();
-      if (result) resolve(result);
-    });
+	return new Promise((resolve) => {
+		authWindow.webContents.on("did-finish-load", async () => {
+			const result = await checkCookies();
+			if (result) resolve(result);
+		});
 
-    const interval = setInterval(async () => {
-      if (authWindow.isDestroyed()) {
-        clearInterval(interval);
-        return;
-      }
-      const result = await checkCookies();
-      if (result) {
-        clearInterval(interval);
-        resolve(result);
-      }
-    }, 1000);
+		const interval = setInterval(async () => {
+			if (authWindow.isDestroyed()) {
+				clearInterval(interval);
+				return;
+			}
+			const result = await checkCookies();
+			if (result) {
+				clearInterval(interval);
+				resolve(result);
+			}
+		}, 1000);
 
-    authWindow.on('closed', () => {
-      clearInterval(interval);
-      resolve({ success: false, error: 'Window closed' });
-    });
-  });
+		authWindow.on("closed", () => {
+			clearInterval(interval);
+			resolve({ success: false, error: "Window closed" });
+		});
+	});
 });
 
-ipcMain.handle('logout', async () => {
-  store.clear();
-  await session.defaultSession.clearStorageData({ storages: ['cookies'] });
-  return { success: true };
+ipcMain.handle("logout", async () => {
+	store.clear();
+	await session.defaultSession.clearStorageData({ storages: ["cookies"] });
+	return { success: true };
 });
 
 // Create a new conversation
-ipcMain.handle('create-conversation', async (_event, model?: string) => {
-  const orgId = await getOrgId();
-  if (!orgId) throw new Error('Not authenticated');
+ipcMain.handle("create-conversation", async (_event, model?: string) => {
+	const orgId = await getOrgId();
+	if (!orgId) throw new Error("Not authenticated");
 
-  const conversationId = crypto.randomUUID();
-  const url = `${BASE_URL}/api/organizations/${orgId}/chat_conversations`;
+	const conversationId = crypto.randomUUID();
+	const url = `${BASE_URL}/api/organizations/${orgId}/chat_conversations`;
 
-  console.log('[API] Creating conversation:', conversationId, 'with model:', model || 'claude-opus-4-5-20251101');
-  console.log('[API] URL:', url);
+	console.log(
+		"[API] Creating conversation:",
+		conversationId,
+		"with model:",
+		model || "claude-opus-4-5-20251101",
+	);
+	console.log("[API] URL:", url);
 
-  const result = await makeRequest(url, 'POST', {
-    uuid: conversationId,
-    name: '',
-    model: model || 'claude-opus-4-5-20251101',
-    project_uuid: null,
-    create_mode: null
-  });
+	const result = await makeRequest(url, "POST", {
+		uuid: conversationId,
+		name: "",
+		model: model || "claude-opus-4-5-20251101",
+		project_uuid: null,
+		create_mode: null,
+	});
 
-  console.log('[API] Create conversation response:', result.status, JSON.stringify(result.data));
+	console.log(
+		"[API] Create conversation response:",
+		result.status,
+		JSON.stringify(result.data),
+	);
 
-  if (result.status !== 200 && result.status !== 201) {
-    throw new Error(`Failed to create conversation: ${result.status} - ${JSON.stringify(result.data)}`);
-  }
+	if (result.status !== 200 && result.status !== 201) {
+		throw new Error(
+			`Failed to create conversation: ${result.status} - ${JSON.stringify(result.data)}`,
+		);
+	}
 
-  // The response includes the conversation data with uuid
-  const data = result.data as { uuid?: string };
-  return { conversationId, parentMessageUuid: data.uuid || conversationId, ...(result.data as object) };
+	// The response includes the conversation data with uuid
+	const data = result.data as { uuid?: string };
+	return {
+		conversationId,
+		parentMessageUuid: data.uuid || conversationId,
+		...(result.data as object),
+	};
 });
 
 // Get list of conversations
-ipcMain.handle('get-conversations', async () => {
-  const orgId = await getOrgId();
-  if (!orgId) throw new Error('Not authenticated');
+ipcMain.handle("get-conversations", async () => {
+	const orgId = await getOrgId();
+	if (!orgId) throw new Error("Not authenticated");
 
-  const url = `${BASE_URL}/api/organizations/${orgId}/chat_conversations?limit=30&starred=false&consistency=eventual`;
-  const result = await makeRequest(url, 'GET');
+	const url = `${BASE_URL}/api/organizations/${orgId}/chat_conversations?limit=30&starred=false&consistency=eventual`;
+	const result = await makeRequest(url, "GET");
 
-  if (result.status !== 200) {
-    throw new Error(`Failed to get conversations: ${result.status}`);
-  }
+	if (result.status !== 200) {
+		throw new Error(`Failed to get conversations: ${result.status}`);
+	}
 
-  return result.data;
+	return result.data;
 });
 
 // Load a specific conversation with messages
-ipcMain.handle('load-conversation', async (_event, convId: string) => {
-  const orgId = await getOrgId();
-  if (!orgId) throw new Error('Not authenticated');
+ipcMain.handle("load-conversation", async (_event, convId: string) => {
+	const orgId = await getOrgId();
+	if (!orgId) throw new Error("Not authenticated");
 
-  const url = `${BASE_URL}/api/organizations/${orgId}/chat_conversations/${convId}?tree=True&rendering_mode=messages&render_all_tools=true&consistency=eventual`;
-  const result = await makeRequest(url, 'GET');
+	const url = `${BASE_URL}/api/organizations/${orgId}/chat_conversations/${convId}?tree=True&rendering_mode=messages&render_all_tools=true&consistency=eventual`;
+	const result = await makeRequest(url, "GET");
 
-  if (result.status !== 200) {
-    throw new Error(`Failed to load conversation: ${result.status}`);
-  }
+	if (result.status !== 200) {
+		throw new Error(`Failed to load conversation: ${result.status}`);
+	}
 
-  return result.data;
+	return result.data;
 });
 
 // Delete a conversation
-ipcMain.handle('delete-conversation', async (_event, convId: string) => {
-  const orgId = await getOrgId();
-  if (!orgId) throw new Error('Not authenticated');
+ipcMain.handle("delete-conversation", async (_event, convId: string) => {
+	const orgId = await getOrgId();
+	if (!orgId) throw new Error("Not authenticated");
 
-  const url = `${BASE_URL}/api/organizations/${orgId}/chat_conversations/${convId}`;
-  const result = await makeRequest(url, 'DELETE');
+	const url = `${BASE_URL}/api/organizations/${orgId}/chat_conversations/${convId}`;
+	const result = await makeRequest(url, "DELETE");
 
-  if (result.status !== 200 && result.status !== 204) {
-    throw new Error(`Failed to delete conversation: ${result.status}`);
-  }
+	if (result.status !== 200 && result.status !== 204) {
+		throw new Error(`Failed to delete conversation: ${result.status}`);
+	}
 
-  return { success: true };
+	return { success: true };
 });
 
 // Rename a conversation
-ipcMain.handle('rename-conversation', async (_event, convId: string, name: string) => {
-  const orgId = await getOrgId();
-  if (!orgId) throw new Error('Not authenticated');
+ipcMain.handle(
+	"rename-conversation",
+	async (_event, convId: string, name: string) => {
+		const orgId = await getOrgId();
+		if (!orgId) throw new Error("Not authenticated");
 
-  const url = `${BASE_URL}/api/organizations/${orgId}/chat_conversations/${convId}`;
-  const result = await makeRequest(url, 'PUT', { name });
+		const url = `${BASE_URL}/api/organizations/${orgId}/chat_conversations/${convId}`;
+		const result = await makeRequest(url, "PUT", { name });
 
-  if (result.status !== 200) {
-    throw new Error(`Failed to rename conversation: ${result.status}`);
-  }
+		if (result.status !== 200) {
+			throw new Error(`Failed to rename conversation: ${result.status}`);
+		}
 
-  return result.data;
-});
+		return result.data;
+	},
+);
 
 // Star/unstar a conversation
-ipcMain.handle('star-conversation', async (_event, convId: string, isStarred: boolean) => {
-  const orgId = await getOrgId();
-  if (!orgId) throw new Error('Not authenticated');
+ipcMain.handle(
+	"star-conversation",
+	async (_event, convId: string, isStarred: boolean) => {
+		const orgId = await getOrgId();
+		if (!orgId) throw new Error("Not authenticated");
 
-  const url = `${BASE_URL}/api/organizations/${orgId}/chat_conversations/${convId}?rendering_mode=raw`;
-  const result = await makeRequest(url, 'PUT', { is_starred: isStarred });
+		const url = `${BASE_URL}/api/organizations/${orgId}/chat_conversations/${convId}?rendering_mode=raw`;
+		const result = await makeRequest(url, "PUT", { is_starred: isStarred });
 
-  if (result.status !== 200) {
-    throw new Error(`Failed to star conversation: ${result.status}`);
-  }
+		if (result.status !== 200) {
+			throw new Error(`Failed to star conversation: ${result.status}`);
+		}
 
-  return result.data;
-});
+		return result.data;
+	},
+);
 
 // Export conversation to Markdown
 ipcMain.handle('export-conversation-markdown', async (_event, conversationData: { title: string; messages: Array<{ role: string; content: string; timestamp?: string }> }) => {
@@ -589,76 +677,146 @@ ipcMain.handle('send-message', async (_event, conversationId: string, message: s
 });
 
 // Stop a streaming response
-ipcMain.handle('stop-response', async (_event, conversationId: string) => {
-  const orgId = await getOrgId();
-  if (!orgId) throw new Error('Not authenticated');
+ipcMain.handle("stop-response", async (_event, conversationId: string) => {
+	const orgId = await getOrgId();
+	if (!orgId) throw new Error("Not authenticated");
 
-  console.log('[API] Stopping response for conversation:', conversationId);
-  await stopResponse(orgId, conversationId);
-  return { success: true };
+	console.log("[API] Stopping response for conversation:", conversationId);
+	await stopResponse(orgId, conversationId);
+	return { success: true };
 });
 
 // Generate title for a conversation
-ipcMain.handle('generate-title', async (_event, conversationId: string, messageContent: string, recentTitles: string[] = []) => {
-  const orgId = await getOrgId();
-  if (!orgId) throw new Error('Not authenticated');
+ipcMain.handle(
+	"generate-title",
+	async (
+		_event,
+		conversationId: string,
+		messageContent: string,
+		recentTitles: string[] = [],
+	) => {
+		const orgId = await getOrgId();
+		if (!orgId) throw new Error("Not authenticated");
 
-  console.log('[API] Generating title for conversation:', conversationId);
-  const result = await generateTitle(orgId, conversationId, messageContent, recentTitles);
-  return result;
-});
+		console.log("[API] Generating title for conversation:", conversationId);
+		const result = await generateTitle(
+			orgId,
+			conversationId,
+			messageContent,
+			recentTitles,
+		);
+		return result;
+	},
+);
 
 // Settings IPC handlers
-ipcMain.handle('open-settings', async () => {
-  createSettingsWindow();
+ipcMain.handle("open-settings", async () => {
+	createSettingsWindow();
 });
 
-ipcMain.handle('get-settings', async () => {
-  return getSettings();
+ipcMain.handle("get-settings", async () => {
+	return getSettings();
 });
 
-ipcMain.handle('save-settings', async (_event, settings: Partial<SettingsSchema>) => {
-  saveSettings(settings);
-  // Re-register shortcut if keybind changed
-  if (settings.spotlightKeybind !== undefined) {
-    registerSpotlightShortcut();
-  }
-  return getSettings();
-});
+ipcMain.handle(
+	"save-settings",
+	async (_event, settings: Partial<SettingsSchema>) => {
+		saveSettings(settings);
+		// Re-register shortcut if keybind changed
+		if (settings.spotlightKeybind !== undefined) {
+			registerSpotlightShortcut();
+		}
+		return getSettings();
+	},
+);
 
 // Handle deep link on Windows (single instance)
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
-  app.quit();
+	app.quit();
 } else {
-  app.on('second-instance', () => {
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.focus();
-    }
-  });
+	app.on("second-instance", () => {
+		if (mainWindow) {
+			if (mainWindow.isMinimized()) mainWindow.restore();
+			mainWindow.focus();
+		}
+	});
 }
 
+const args = process.argv.slice(process.defaultApp ? 2 : 1);
+const spotlightMode = args.includes("--spotlight");
+const settingsMode = args.includes("--settings");
+
+let tray: Tray | null = null;
+
 app.whenReady().then(() => {
-  createMainWindow();
+	// If launched with --spotlight flag, just open spotlight and exit when closed
+	if (spotlightMode) {
+		createSpotlightWindow();
 
-  // Register spotlight shortcut from settings
-  registerSpotlightShortcut();
+		// Quit when spotlight closes if launched in spotlight mode
+		if (spotlightWindow) {
+			spotlightWindow.on("closed", () => {
+				app.quit();
+			});
+		}
+		return;
+	} else if (settingsMode) {
+		createSettingsWindow();
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createMainWindow();
-    }
-  });
+		// Quit when spotlight closes if launched in spotlight mode
+		if (settingsWindow) {
+			settingsWindow.on("closed", () => {
+				app.quit();
+			});
+		}
+		return;
+	}
+
+	createMainWindow();
+
+	// Only create tray when not on macos
+	if (process.platform !== "darwin" && !isWayland) {
+		try {
+			// You'll need a tray icon PNG in your build folder
+			tray = new Tray(path.join(__dirname, "../build/tray-icon.png"));
+
+			const contextMenu = Menu.buildFromTemplate([
+				{ label: "Show", click: () => mainWindow?.show() },
+				{ label: "Quit", click: () => app.quit() },
+			]);
+
+			tray.setContextMenu(contextMenu);
+			tray.setToolTip("Open Claude");
+
+			// Show window on tray click
+			tray.on("click", () => {
+				mainWindow?.show();
+			});
+		} catch (e) {
+			console.warn("[Tray] Failed to create tray icon:", e);
+		}
+	}
+	// Register spotlight shortcut from settings
+	registerSpotlightShortcut();
+
+	app.on("activate", () => {
+		if (BrowserWindow.getAllWindows().length === 0) {
+			createMainWindow();
+		}
+	});
 });
 
 // Unregister shortcuts when app quits
-app.on('will-quit', () => {
-  globalShortcut.unregisterAll();
+app.on("will-quit", () => {
+	globalShortcut.unregisterAll();
 });
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
+app.on("window-all-closed", () => {
+	// On macOS and Wayland, let the app quit when windows close
+	// (On Wayland, shortcuts are handled by compositor, not the app)
+	// On X11 with tray, keep running
+	if (process.platform === "darwin" || isWayland || !tray) {
+		app.quit();
+	}
 });
