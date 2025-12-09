@@ -10,10 +10,18 @@ let mainWindow: BrowserWindow | null = null;
 let spotlightWindow: BrowserWindow | null = null;
 let settingsWindow: BrowserWindow | null = null;
 
+// Default keyboard shortcuts
+const DEFAULT_KEYBOARD_SHORTCUTS = {
+  spotlight: 'CommandOrControl+Shift+C',
+  newConversation: 'CommandOrControl+N',
+  toggleSidebar: 'CommandOrControl+B',
+};
+
 // Default settings
 const DEFAULT_SETTINGS: SettingsSchema = {
   spotlightKeybind: 'CommandOrControl+Shift+C',
   spotlightPersistHistory: true,
+  keyboardShortcuts: DEFAULT_KEYBOARD_SHORTCUTS,
 };
 
 // Get settings with defaults
@@ -28,23 +36,57 @@ function saveSettings(settings: Partial<SettingsSchema>) {
   store.set('settings', { ...current, ...settings });
 }
 
-// Register spotlight shortcut
-function registerSpotlightShortcut() {
+// Register all keyboard shortcuts
+function registerKeyboardShortcuts() {
   globalShortcut.unregisterAll();
   const settings = getSettings();
-  const keybind = settings.spotlightKeybind || DEFAULT_SETTINGS.spotlightKeybind;
+  const shortcuts = settings.keyboardShortcuts || DEFAULT_KEYBOARD_SHORTCUTS;
 
+  // Register spotlight shortcut
+  const spotlightKey = shortcuts.spotlight || settings.spotlightKeybind || DEFAULT_KEYBOARD_SHORTCUTS.spotlight;
   try {
-    globalShortcut.register(keybind, () => {
+    globalShortcut.register(spotlightKey, () => {
       createSpotlightWindow();
     });
   } catch (e) {
-    // Fallback to default if custom keybind fails
-    console.error('Failed to register keybind:', keybind, e);
-    globalShortcut.register(DEFAULT_SETTINGS.spotlightKeybind, () => {
+    console.error('Failed to register spotlight keybind:', spotlightKey, e);
+    globalShortcut.register(DEFAULT_KEYBOARD_SHORTCUTS.spotlight, () => {
       createSpotlightWindow();
     });
   }
+
+  // Register new conversation shortcut
+  const newConvKey = shortcuts.newConversation || DEFAULT_KEYBOARD_SHORTCUTS.newConversation;
+  try {
+    globalShortcut.register(newConvKey, () => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('new-conversation');
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    });
+  } catch (e) {
+    console.error('Failed to register new conversation keybind:', newConvKey, e);
+  }
+
+  // Register toggle sidebar shortcut
+  const sidebarKey = shortcuts.toggleSidebar || DEFAULT_KEYBOARD_SHORTCUTS.toggleSidebar;
+  try {
+    globalShortcut.register(sidebarKey, () => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('toggle-sidebar');
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    });
+  } catch (e) {
+    console.error('Failed to register toggle sidebar keybind:', sidebarKey, e);
+  }
+}
+
+// Legacy function for compatibility
+function registerSpotlightShortcut() {
+  registerKeyboardShortcuts();
 }
 
 // Create spotlight search window
