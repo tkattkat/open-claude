@@ -458,20 +458,12 @@ async function loadConversationsList() {
   }
 }
 
-function renderConversationsList() {
-  const content = $('sidebar-content');
-  if (!content) return;
-
-  if (!conversations || conversations.length === 0) {
-    content.innerHTML = '<div class="conv-loading">No conversations yet</div>';
-    return;
-  }
-
-  content.innerHTML = conversations.map(c => `
+function renderConversationItem(c: Conversation): string {
+  return `
     <div class="conv-item ${c.uuid === conversationId ? 'active' : ''}" data-uuid="${c.uuid}" data-starred="${c.is_starred || false}">
       <div class="conv-item-row">
         <div class="conv-item-info" data-action="load" data-uuid="${c.uuid}">
-          <div class="conv-item-title">${c.is_starred ? '<span class="conv-star">★</span>' : ''}${escapeHtml(c.name || c.summary || 'New conversation')}</div>
+          <div class="conv-item-title">${escapeHtml(c.name || c.summary || 'New conversation')}</div>
           <div class="conv-item-date">${formatDate(c.updated_at)}</div>
         </div>
         <button class="conv-menu-btn" data-action="menu" data-uuid="${c.uuid}">⋯</button>
@@ -491,7 +483,36 @@ function renderConversationsList() {
         </div>
       </div>
     </div>
-  `).join('');
+  `;
+}
+
+function renderConversationsList() {
+  const content = $('sidebar-content');
+  if (!content) return;
+
+  if (!conversations || conversations.length === 0) {
+    content.innerHTML = '<div class="conv-loading">No conversations yet</div>';
+    return;
+  }
+
+  const starred = conversations.filter(c => c.is_starred);
+  const unstarred = conversations.filter(c => !c.is_starred);
+
+  let html = '';
+
+  if (starred.length > 0) {
+    html += '<div class="conv-section-header">Favorites</div>';
+    html += starred.map(renderConversationItem).join('');
+  }
+
+  if (unstarred.length > 0) {
+    if (starred.length > 0) {
+      html += '<div class="conv-section-header">Recent</div>';
+    }
+    html += unstarred.map(renderConversationItem).join('');
+  }
+
+  content.innerHTML = html;
 
   // Add event listeners
   content.querySelectorAll('[data-action]').forEach(el => {

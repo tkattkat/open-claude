@@ -375,7 +375,7 @@ ipcMain.handle('get-conversations', async () => {
   const orgId = await getOrgId();
   if (!orgId) throw new Error('Not authenticated');
 
-  const url = `${BASE_URL}/api/organizations/${orgId}/chat_conversations?limit=30&starred=false&consistency=eventual`;
+  const url = `${BASE_URL}/api/organizations/${orgId}/chat_conversations?limit=30&consistency=eventual`;
   const result = await makeRequest(url, 'GET');
 
   if (result.status !== 200) {
@@ -438,7 +438,7 @@ ipcMain.handle('star-conversation', async (_event, convId: string, isStarred: bo
   const url = `${BASE_URL}/api/organizations/${orgId}/chat_conversations/${convId}?rendering_mode=raw`;
   const result = await makeRequest(url, 'PUT', { is_starred: isStarred });
 
-  if (result.status !== 200) {
+  if (result.status !== 202) {
     throw new Error(`Failed to star conversation: ${result.status}`);
   }
 
