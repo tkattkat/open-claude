@@ -22,7 +22,9 @@ declare global {
       deleteConversation: (convId: string) => Promise<void>;
       renameConversation: (convId: string, name: string) => Promise<void>;
       starConversation: (convId: string, isStarred: boolean) => Promise<void>;
+      exportConversationMarkdown: (conversationData: { title: string; messages: Array<{ role: string; content: string; timestamp?: string }> }) => Promise<{ success: boolean; canceled?: boolean; filePath?: string }>;
       sendMessage: (convId: string, message: string, parentUuid: string, attachments?: AttachmentPayload[], mcpTools?: Array<{ serverId: string; toolName: string }>) => Promise<void>;
+    
       stopResponse: (convId: string) => Promise<void>;
       generateTitle: (convId: string, messageContent: string) => Promise<void>;
       uploadAttachments: (files: Array<{ name: string; size: number; type: string; data: ArrayBuffer | Uint8Array | number[] }>) => Promise<UploadedAttachmentPayload[]>;
@@ -52,7 +54,27 @@ interface Conversation {
 }
 
 interface ConversationData {
+  name?: string;
   chat_messages?: Message[];
+}
+
+interface FileAsset {
+  url: string;
+  file_variant?: string;
+  primary_color?: string;
+  image_width?: number;
+  image_height?: number;
+}
+
+interface MessageFile {
+  file_kind: string;
+  file_uuid: string;
+  file_name: string;
+  created_at?: string;
+  thumbnail_url?: string;
+  preview_url?: string;
+  thumbnail_asset?: FileAsset;
+  preview_asset?: FileAsset;
 }
 
 interface Message {
@@ -60,6 +82,9 @@ interface Message {
   sender: string;
   content?: ContentBlock[];
   text?: string;
+  created_at?: string;
+  files?: MessageFile[];
+  files_v2?: MessageFile[];
 }
 
 interface ContentBlock {
@@ -198,6 +223,8 @@ let openDropdownId: string | null = null;
 let pendingAttachments: UploadedAttachment[] = [];
 let uploadingAttachments = false;
 let attachmentError = '';
+let currentConversationTitle = '';
+let currentConversationMessages: Array<{ role: string; content: string; timestamp?: string }> = [];
 
 // MCP Tools selection state
 let mcpServerStatus: MCPServerStatus[] = [];
@@ -245,22 +272,28 @@ function removeAttachment(id: string) {
   renderAttachmentList();
 }
 
+const imageIconSvg = `<svg class="attachment-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>`;
+const fileIconSvg = `<svg class="attachment-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`;
+
 function renderAttachmentList() {
   const containers = [
     { list: $('attachment-list'), status: $('attachment-status') },
     { list: $('home-attachment-list'), status: $('home-attachment-status') }
   ];
 
-  const pills = pendingAttachments.map(a => `
-    <div class="attachment-pill" data-id="${a.id}">
-      <div class="attachment-icon">${a.file_type?.startsWith('image/') ? '🖼' : '📎'}</div>
-      <div class="attachment-meta">
-        <div class="attachment-name">${escapeHtml(a.file_name)}</div>
-        <div class="attachment-size">${formatFileSize(a.file_size)}</div>
+  const pills = pendingAttachments.map(a => {
+    const icon = a.file_type?.startsWith('image/') ? imageIconSvg : fileIconSvg;
+    return `
+      <div class="attachment-pill" data-id="${a.id}">
+        <div class="attachment-icon">${icon}</div>
+        <div class="attachment-meta">
+          <div class="attachment-name">${escapeHtml(a.file_name)}</div>
+          <div class="attachment-size">${formatFileSize(a.file_size)}</div>
+        </div>
+        <button class="attachment-remove" data-id="${a.id}" title="Remove">✕</button>
       </div>
-      <button class="attachment-remove" data-id="${a.id}" title="Remove">✕</button>
-    </div>
-  `).join('');
+    `;
+  }).join('');
 
   containers.forEach(({ list, status }) => {
     if (!list) return;
@@ -677,20 +710,12 @@ async function loadConversationsList() {
   }
 }
 
-function renderConversationsList() {
-  const content = $('sidebar-content');
-  if (!content) return;
-
-  if (!conversations || conversations.length === 0) {
-    content.innerHTML = '<div class="conv-loading">No conversations yet</div>';
-    return;
-  }
-
-  content.innerHTML = conversations.map(c => `
+function renderConversationItem(c: Conversation): string {
+  return `
     <div class="conv-item ${c.uuid === conversationId ? 'active' : ''}" data-uuid="${c.uuid}" data-starred="${c.is_starred || false}">
       <div class="conv-item-row">
         <div class="conv-item-info" data-action="load" data-uuid="${c.uuid}">
-          <div class="conv-item-title">${c.is_starred ? '<span class="conv-star">★</span>' : ''}${escapeHtml(c.name || c.summary || 'New conversation')}</div>
+          <div class="conv-item-title">${escapeHtml(c.name || c.summary || 'New conversation')}</div>
           <div class="conv-item-date">${formatDate(c.updated_at)}</div>
         </div>
         <button class="conv-menu-btn" data-action="menu" data-uuid="${c.uuid}">⋯</button>
@@ -710,7 +735,36 @@ function renderConversationsList() {
         </div>
       </div>
     </div>
-  `).join('');
+  `;
+}
+
+function renderConversationsList() {
+  const content = $('sidebar-content');
+  if (!content) return;
+
+  if (!conversations || conversations.length === 0) {
+    content.innerHTML = '<div class="conv-loading">No conversations yet</div>';
+    return;
+  }
+
+  const starred = conversations.filter(c => c.is_starred);
+  const unstarred = conversations.filter(c => !c.is_starred);
+
+  let html = '';
+
+  if (starred.length > 0) {
+    html += '<div class="conv-section-header">Favorites</div>';
+    html += starred.map(renderConversationItem).join('');
+  }
+
+  if (unstarred.length > 0) {
+    if (starred.length > 0) {
+      html += '<div class="conv-section-header">Recent</div>';
+    }
+    html += unstarred.map(renderConversationItem).join('');
+  }
+
+  content.innerHTML = html;
 
   // Add event listeners
   content.querySelectorAll('[data-action]').forEach(el => {
@@ -885,15 +939,18 @@ function addMessage(role: string, content: string, raw = false, storedParentUuid
   if (role === 'user' && attachments.length > 0) {
     const attachmentsEl = document.createElement('div');
     attachmentsEl.className = 'message-attachments';
-    attachmentsEl.innerHTML = attachments.map(a => `
-      <div class="message-attachment-row">
-        <span class="message-attachment-icon">${a.file_type?.startsWith('image/') ? '🖼' : '📎'}</span>
-        <div class="message-attachment-info">
-          <div class="message-attachment-name">${escapeHtml(a.file_name)}</div>
-          <div class="message-attachment-size">${formatFileSize(a.file_size)}</div>
+    attachmentsEl.innerHTML = attachments.map(a => {
+      const icon = a.file_type?.startsWith('image/') ? imageIconSvg : fileIconSvg;
+      return `
+        <div class="message-attachment-row">
+          <div class="message-attachment-icon">${icon}</div>
+          <div class="message-attachment-info">
+            <div class="message-attachment-name">${escapeHtml(a.file_name)}</div>
+            ${a.file_size ? `<div class="message-attachment-size">${formatFileSize(a.file_size)}</div>` : ''}
+          </div>
         </div>
-      </div>
-    `).join('');
+      `;
+    }).join('');
     el.appendChild(attachmentsEl);
   }
 
@@ -925,6 +982,10 @@ function addMessageRaw(role: string, htmlContent: string): HTMLElement {
   c.className = 'message-content';
   c.innerHTML = htmlContent;
   el.appendChild(c);
+
+  c.querySelectorAll('.step-item').forEach(stepEl => {
+    stepEl.addEventListener('click', () => stepEl.classList.toggle('expanded'));
+  });
 
   const messages = $('messages');
   if (messages) messages.appendChild(el);
@@ -1444,6 +1505,8 @@ async function loadConversation(convId: string) {
     clearAttachments();
     const conv = await window.claude.loadConversation(convId);
     conversationId = convId;
+    currentConversationTitle = conv.name || 'Conversation';
+    currentConversationMessages = [];
 
     // Update current tab with this conversation
     const currentTab = tabs.find(t => t.id === activeTabId);
@@ -1485,18 +1548,41 @@ async function loadConversation(convId: string) {
           } else if (msg.text) {
             text = msg.text;
           }
-          if (text) {
-            addMessage('user', text, false, prevMsgUuid);
+
+          const messageFiles = msg.files_v2 || msg.files || [];
+          const attachments: UploadedAttachment[] = messageFiles.map(f => ({
+            id: f.file_uuid,
+            document_id: f.file_uuid,
+            file_name: f.file_name,
+            file_size: 0, // Size not available in loaded messages
+            file_type: f.file_kind === 'image' ? 'image/png' : 'application/octet-stream',
+            previewUrl: f.preview_url || f.thumbnail_url
+          }));
+
+          if (text || attachments.length > 0) {
+            addMessage('user', text, false, prevMsgUuid, '', attachments);
+            currentConversationMessages.push({ role: 'human', content: text, timestamp: msg.created_at });
           }
         } else {
+          let assistantText = '';
           if (msg.content && Array.isArray(msg.content)) {
             const steps = parseStoredMessageContent(msg.content);
             if (steps.length > 0) {
               const html = buildInterleavedContent(steps);
               addMessageRaw('assistant', html);
+              // Extract text content for export
+              for (const step of steps) {
+                if (step.type === 'text') {
+                  assistantText += step.text || '';
+                }
+              }
             }
           } else if (msg.text) {
             addMessage('assistant', msg.text);
+            assistantText = msg.text;
+          }
+          if (assistantText) {
+            currentConversationMessages.push({ role: 'assistant', content: assistantText, timestamp: msg.created_at });
           }
         }
 
@@ -1517,6 +1603,29 @@ async function loadConversation(convId: string) {
     scrollToBottom();
   } catch (e) {
     console.error('Failed to load conversation:', e);
+  }
+}
+
+// Export conversation to Markdown
+async function exportConversation() {
+  if (!conversationId || currentConversationMessages.length === 0) {
+    console.error('No conversation to export');
+    return;
+  }
+
+  try {
+    const result = await window.claude.exportConversationMarkdown({
+      title: currentConversationTitle,
+      messages: currentConversationMessages
+    });
+
+    if (result.success) {
+      console.log('Conversation exported to:', result.filePath);
+    } else if (!result.canceled) {
+      console.error('Failed to export conversation');
+    }
+  } catch (e) {
+    console.error('Failed to export conversation:', e);
   }
 }
 
@@ -1699,6 +1808,7 @@ async function sendMessage() {
 
   hideEmptyState();
   addMessage('user', msg, false, null, '', userAttachmentCopies);
+  currentConversationMessages.push({ role: 'human', content: msg, timestamp: new Date().toISOString() });
   currentStreamingElement = addMessage('assistant', '<div class="loading-dots"><span></span><span></span><span></span></div>', true);
 
   try {
@@ -2041,6 +2151,12 @@ async function init() {
         });
       }
       parentMessageUuid = d.messageUuid;
+
+      // Store assistant message for export
+      if (d.fullText) {
+        currentConversationMessages.push({ role: 'assistant', content: d.fullText, timestamp: new Date().toISOString() });
+      }
+
       currentStreamingElement = null;
       resetStreamingBlocks();
       isLoading = false;
