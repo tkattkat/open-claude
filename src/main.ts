@@ -255,6 +255,7 @@ function createSpotlightWindow() {
 }
 
 function createMainWindow(): BrowserWindow {
+  const isMac = process.platform === 'darwin';
   const win = new BrowserWindow({
     width: 900,
     height: 700,
@@ -625,7 +626,7 @@ ipcMain.handle('export-conversation-markdown', async (_event, conversationData: 
   }
 
   // Show save dialog
-  const result = await dialog.showSaveDialog(mainWindow!, {
+  const result = await dialog.showSaveDialog(getMainWindow()!, {
     title: 'Export Conversation',
     defaultPath: `${title || 'conversation'}.md`,
     filters: [
