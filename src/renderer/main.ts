@@ -2628,13 +2628,13 @@ function setupEventListeners() {
   // New chat button
   $('new-chat-btn')?.addEventListener('click', newChat);
 
-  // Settings buttons (sidebar and tab bar)
-  $('settings-btn')?.addEventListener('click', () => {
-    window.claude.openSettings();
-  });
+  // Settings button (tab bar only)
   $('tab-bar-settings-btn')?.addEventListener('click', () => {
     window.claude.openSettings();
   });
+
+  // Pin sidebar button
+  $('pin-sidebar-btn')?.addEventListener('click', togglePinSidebar);
 
   // Sidebar toggle buttons
   $('sidebar-toggle-btn')?.addEventListener('click', toggleSidebar);
@@ -2647,11 +2647,8 @@ function setupEventListeners() {
   // New tab button
   $('new-tab-btn')?.addEventListener('click', newTab);
 
-  // New window buttons (tab bar and sidebar)
+  // New window button (tab bar)
   $('new-window-btn')?.addEventListener('click', async () => {
-    await window.claude.newWindow();
-  });
-  $('sidebar-new-window-btn')?.addEventListener('click', async () => {
     await window.claude.newWindow();
   });
 
