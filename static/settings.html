@@ -12,43 +12,321 @@
       <h1>Settings</h1>
     </div>
 
-    <div class="settings-content">
-      <!-- Spotlight Section -->
-      <div class="settings-section">
-        <h2>Spotlight</h2>
-
-        <div class="setting-item">
-          <div class="setting-info">
-            <label>Keyboard Shortcut</label>
-            <span class="setting-description">Global shortcut to open spotlight</span>
-          </div>
-          <div class="keybind-input" id="keybind-input" tabindex="0">
-            <span class="keybind-display" id="keybind-display">⌘ + Shift + Space</span>
-            <span class="keybind-hint">Click to change</span>
-          </div>
-        </div>
-
-        <div class="setting-item">
-          <div class="setting-info">
-            <label>Persist History</label>
-            <span class="setting-description">Keep spotlight chat history after closing</span>
-          </div>
-          <label class="toggle">
-            <input type="checkbox" id="persist-history">
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
+    <div class="settings-body">
+      <!-- Sidebar with tabs -->
+      <div class="settings-sidebar">
+        <button class="settings-tab active" data-tab="general">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+          General
+        </button>
+        <button class="settings-tab" data-tab="display">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+            <line x1="8" y1="21" x2="16" y2="21"></line>
+            <line x1="12" y1="17" x2="12" y2="21"></line>
+          </svg>
+          Display
+        </button>
+        <button class="settings-tab" data-tab="shortcuts">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 3a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3H6a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3V6a3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3h12a3 3 0 0 0 3-3 3 3 0 0 0-3-3z"></path>
+          </svg>
+          Shortcuts
+        </button>
+        <button class="settings-tab" data-tab="mcp">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
+          </svg>
+          MCP Servers
+        </button>
+        <button class="settings-tab" data-tab="about">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="16" x2="12" y2="12"></line>
+            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+          </svg>
+          About
+        </button>
       </div>
 
-      <!-- About Section -->
-      <div class="settings-section">
-        <h2>About</h2>
-        <div class="about-info">
-          <div class="about-row">
-            <span class="about-label">Version</span>
-            <span class="about-value" id="app-version">1.0.0</span>
+      <!-- Content panels -->
+      <div class="settings-content">
+        <!-- General Panel -->
+        <div class="settings-panel active" id="panel-general">
+          <h2>General</h2>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <label>Persist Spotlight History</label>
+              <span class="setting-description">Keep spotlight chat history after closing</span>
+            </div>
+            <label class="toggle">
+              <input type="checkbox" id="persist-history">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <label>Start at Login</label>
+              <span class="setting-description">Automatically launch when you log in</span>
+            </div>
+            <label class="toggle">
+              <input type="checkbox" id="start-at-login">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="setting-divider"></div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <label>Account</label>
+              <span class="setting-description">Sign out of your Claude account</span>
+            </div>
+            <button class="sign-out-settings-btn" id="sign-out-btn">Sign Out</button>
           </div>
         </div>
+
+        <!-- Display Panel -->
+        <div class="settings-panel" id="panel-display">
+          <h2>Display</h2>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <label>Sans-Serif Font</label>
+              <span class="setting-description">Font for UI text and chat messages</span>
+            </div>
+            <div class="font-picker" id="sans-font-picker">
+              <input type="text" class="font-search" id="sans-font-search" placeholder="Search fonts..." autocomplete="off">
+              <div class="font-dropdown" id="sans-font-dropdown">
+                <div class="font-group">
+                  <div class="font-group-label">System Fonts</div>
+                  <div class="font-option" data-font="system" data-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">System Default</div>
+                  <div class="font-option" data-font="sf-pro" data-family="'SF Pro Display', -apple-system, sans-serif">SF Pro Display</div>
+                  <div class="font-option" data-font="helvetica" data-family="'Helvetica Neue', Helvetica, sans-serif">Helvetica Neue</div>
+                  <div class="font-option" data-font="arial" data-family="Arial, sans-serif">Arial</div>
+                  <div class="font-option" data-font="georgia" data-family="Georgia, serif">Georgia</div>
+                  <div class="font-option" data-font="times" data-family="'Times New Roman', serif">Times New Roman</div>
+                </div>
+                <div class="font-group">
+                  <div class="font-group-label">Google Fonts</div>
+                  <div class="font-option" data-font="inter" data-family="Inter, sans-serif">Inter</div>
+                  <div class="font-option" data-font="roboto" data-family="Roboto, sans-serif">Roboto</div>
+                  <div class="font-option" data-font="open-sans" data-family="'Open Sans', sans-serif">Open Sans</div>
+                  <div class="font-option" data-font="lato" data-family="Lato, sans-serif">Lato</div>
+                  <div class="font-option" data-font="poppins" data-family="Poppins, sans-serif">Poppins</div>
+                  <div class="font-option" data-font="montserrat" data-family="Montserrat, sans-serif">Montserrat</div>
+                  <div class="font-option" data-font="nunito" data-family="Nunito, sans-serif">Nunito</div>
+                  <div class="font-option" data-font="raleway" data-family="Raleway, sans-serif">Raleway</div>
+                  <div class="font-option" data-font="source-sans" data-family="'Source Sans 3', sans-serif">Source Sans</div>
+                  <div class="font-option" data-font="work-sans" data-family="'Work Sans', sans-serif">Work Sans</div>
+                  <div class="font-option" data-font="dm-sans" data-family="'DM Sans', sans-serif">DM Sans</div>
+                  <div class="font-option" data-font="outfit" data-family="Outfit, sans-serif">Outfit</div>
+                  <div class="font-option" data-font="lexend" data-family="Lexend, sans-serif">Lexend</div>
+                  <div class="font-option" data-font="plus-jakarta" data-family="'Plus Jakarta Sans', sans-serif">Plus Jakarta Sans</div>
+                  <div class="font-option" data-font="space-grotesk" data-family="'Space Grotesk', sans-serif">Space Grotesk</div>
+                  <div class="font-option" data-font="geist" data-family="Geist, sans-serif">Geist</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <label>Monospace Font</label>
+              <span class="setting-description">Font for code blocks and technical content</span>
+            </div>
+            <div class="font-picker" id="mono-font-picker">
+              <input type="text" class="font-search" id="mono-font-search" placeholder="Search fonts..." autocomplete="off">
+              <div class="font-dropdown" id="mono-font-dropdown">
+                <div class="font-group">
+                  <div class="font-group-label">System Fonts</div>
+                  <div class="font-option" data-font="system-mono" data-family="'SF Mono', Menlo, Monaco, 'Courier New', monospace">System Default</div>
+                  <div class="font-option" data-font="sf-mono" data-family="'SF Mono', monospace">SF Mono</div>
+                  <div class="font-option" data-font="menlo" data-family="Menlo, monospace">Menlo</div>
+                  <div class="font-option" data-font="monaco" data-family="Monaco, monospace">Monaco</div>
+                  <div class="font-option" data-font="consolas" data-family="Consolas, monospace">Consolas</div>
+                  <div class="font-option" data-font="courier" data-family="'Courier New', monospace">Courier New</div>
+                </div>
+                <div class="font-group">
+                  <div class="font-group-label">Google Fonts</div>
+                  <div class="font-option" data-font="jetbrains" data-family="'JetBrains Mono', monospace">JetBrains Mono</div>
+                  <div class="font-option" data-font="fira-code" data-family="'Fira Code', monospace">Fira Code</div>
+                  <div class="font-option" data-font="source-code" data-family="'Source Code Pro', monospace">Source Code Pro</div>
+                  <div class="font-option" data-font="roboto-mono" data-family="'Roboto Mono', monospace">Roboto Mono</div>
+                  <div class="font-option" data-font="ibm-plex" data-family="'IBM Plex Mono', monospace">IBM Plex Mono</div>
+                  <div class="font-option" data-font="inconsolata" data-family="Inconsolata, monospace">Inconsolata</div>
+                  <div class="font-option" data-font="space-mono" data-family="'Space Mono', monospace">Space Mono</div>
+                  <div class="font-option" data-font="ubuntu-mono" data-family="'Ubuntu Mono', monospace">Ubuntu Mono</div>
+                  <div class="font-option" data-font="geist-mono" data-family="'Geist Mono', monospace">Geist Mono</div>
+                  <div class="font-option" data-font="cascadia" data-family="'Cascadia Code', monospace">Cascadia Code</div>
+                  <div class="font-option" data-font="victor-mono" data-family="'Victor Mono', monospace">Victor Mono</div>
+                  <div class="font-option" data-font="hack" data-family="Hack, monospace">Hack</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <label>Font Size</label>
+              <span class="setting-description">Base font size for the interface</span>
+            </div>
+            <select class="setting-select" id="font-size">
+              <option value="small">Small (13px)</option>
+              <option value="medium" selected>Medium (14px)</option>
+              <option value="large">Large (15px)</option>
+              <option value="xlarge">Extra Large (16px)</option>
+            </select>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <label>Theme</label>
+              <span class="setting-description">Color scheme preference</span>
+            </div>
+            <select class="setting-select" id="theme">
+              <option value="system">System</option>
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </select>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <label>Window Transparency</label>
+              <span class="setting-description">Adjust window background opacity</span>
+            </div>
+            <div class="slider-container">
+              <input type="range" class="setting-slider" id="transparency" min="50" max="100" value="100">
+              <span class="slider-value" id="transparency-value">100%</span>
+            </div>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <label>Blur Effect</label>
+              <span class="setting-description">Background blur intensity</span>
+            </div>
+            <select class="setting-select" id="blur-effect">
+              <option value="none">None</option>
+              <option value="light">Light</option>
+              <option value="medium" selected>Medium</option>
+              <option value="heavy">Heavy</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Shortcuts Panel -->
+        <div class="settings-panel" id="panel-shortcuts">
+          <h2>Keyboard Shortcuts</h2>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <label>Open Spotlight</label>
+              <span class="setting-description">Global shortcut to open spotlight search</span>
+            </div>
+            <div class="keybind-input" id="spotlight-keybind-input" tabindex="0" data-shortcut="spotlight">
+              <span class="keybind-display" id="spotlight-keybind-display">Loading...</span>
+              <span class="keybind-hint">Click to change</span>
+            </div>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <label>New Conversation</label>
+              <span class="setting-description">Global shortcut to start a new conversation</span>
+            </div>
+            <div class="keybind-input" id="new-conv-keybind-input" tabindex="0" data-shortcut="newConversation">
+              <span class="keybind-display" id="new-conv-keybind-display">Loading...</span>
+              <span class="keybind-hint">Click to change</span>
+            </div>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <label>Toggle Sidebar</label>
+              <span class="setting-description">Global shortcut to toggle the sidebar</span>
+            </div>
+            <div class="keybind-input" id="sidebar-keybind-input" tabindex="0" data-shortcut="toggleSidebar">
+              <span class="keybind-display" id="sidebar-keybind-display">Loading...</span>
+              <span class="keybind-hint">Click to change</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- MCP Servers Panel -->
+        <div class="settings-panel" id="panel-mcp">
+          <h2>MCP Servers</h2>
+          <p class="section-description">Configure Model Context Protocol servers to extend Claude's capabilities with external tools and data sources.</p>
+
+          <div id="mcp-servers-list" class="mcp-servers-list">
+            <!-- Server items will be rendered here -->
+          </div>
+
+          <button class="add-server-btn" id="add-mcp-server-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            Add MCP Server
+          </button>
+        </div>
+
+        <!-- About Panel -->
+        <div class="settings-panel" id="panel-about">
+          <h2>About</h2>
+          <div class="about-info">
+            <div class="about-row">
+              <span class="about-label">Version</span>
+              <span class="about-value" id="app-version">1.0.0</span>
+            </div>
+            <div class="about-row">
+              <span class="about-label">Electron</span>
+              <span class="about-value" id="electron-version">-</span>
+            </div>
+            <div class="about-row">
+              <span class="about-label">Chrome</span>
+              <span class="about-value" id="chrome-version">-</span>
+            </div>
+          </div>
+          <div class="about-links">
+            <a href="#" id="github-link" class="about-link">View on GitHub</a>
+            <a href="#" id="docs-link" class="about-link">Documentation</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add MCP Server Modal -->
+  <div class="modal-overlay" id="add-server-modal" style="display: none;">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="modal-title">Add MCP Server</h3>
+        <button class="modal-close" id="close-modal-btn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="server-name">Name</label>
+          <input type="text" id="server-name" placeholder="My MCP Server">
+        </div>
+        <div class="form-group">
+          <label for="server-command">Command</label>
+          <input type="text" id="server-command" placeholder="npx">
+        </div>
+        <div class="form-group">
+          <label for="server-args">Arguments (comma-separated)</label>
+          <input type="text" id="server-args" placeholder="-y, @modelcontextprotocol/server-filesystem">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" id="cancel-modal-btn">Cancel</button>
+        <button class="btn-primary" id="save-server-btn">Save</button>
       </div>
     </div>
   </div>

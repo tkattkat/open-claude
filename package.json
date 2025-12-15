@@ -25,6 +25,14 @@
     "mac": {
       "category": "public.app-category.productivity",
       "icon": "build/icon.icns",
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "extendInfo": {
+        "NSCameraUsageDescription": "Open Claude needs camera access for video features and MCP tools",
+        "NSMicrophoneUsageDescription": "Open Claude needs microphone access for audio features and MCP tools",
+        "NSScreenCaptureUsageDescription": "Open Claude needs screen capture access for sharing screen content with MCP tools",
+        "NSAppleEventsUsageDescription": "Open Claude needs automation access for accessibility features"
+      },
       "target": [
         {
           "target": "dmg",
@@ -43,7 +51,9 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ]
     },
@@ -56,7 +66,9 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.24.3",
     "electron-store": "^11.0.2",
+    "highlight.js": "^11.11.1",
     "marked": "^17.0.1"
   },
   "devDependencies": {

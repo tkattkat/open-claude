@@ -13,8 +13,8 @@ contextBridge.exposeInMainWorld('claude', {
   exportConversationMarkdown: (conversationData: { title: string; messages: Array<{ role: string; content: string; timestamp?: string }> }) =>
     ipcRenderer.invoke('export-conversation-markdown', conversationData),
   generateTitle: (convId: string, messageContent: string, recentTitles?: string[]) => ipcRenderer.invoke('generate-title', convId, messageContent, recentTitles || []),
-  sendMessage: (conversationId: string, message: string, parentMessageUuid: string, attachments?: unknown[]) =>
-    ipcRenderer.invoke('send-message', conversationId, message, parentMessageUuid, attachments || []),
+  sendMessage: (conversationId: string, message: string, parentMessageUuid: string, attachments?: unknown[], mcpTools?: Array<{ serverId: string; toolName: string }>) =>
+    ipcRenderer.invoke('send-message', conversationId, message, parentMessageUuid, attachments || [], mcpTools || []),
   uploadAttachments: (files: Array<{ name: string; size: number; type: string; data: ArrayBuffer | Uint8Array | number[] }>) =>
     ipcRenderer.invoke('upload-attachments', files),
   stopResponse: (conversationId: string) => ipcRenderer.invoke('stop-response', conversationId),
@@ -113,9 +113,48 @@ contextBridge.exposeInMainWorld('claude', {
     ipcRenderer.on('toggle-search-modal', () => callback());
   },
 
+  // Global keyboard shortcuts
+  onNewConversation: (callback: () => void) => {
+    ipcRenderer.on('new-conversation', () => callback());
+  },
+  onToggleSidebar: (callback: () => void) => {
+    ipcRenderer.on('toggle-sidebar', () => callback());
+  },
+
   // Settings functions
   openSettings: () => ipcRenderer.invoke('open-settings'),
   getSettings: () => ipcRenderer.invoke('get-settings'),
-  saveSettings: (settings: { spotlightKeybind?: string; spotlightPersistHistory?: boolean }) =>
+  saveSettings: (settings: { spotlightKeybind?: string; spotlightPersistHistory?: boolean; keyboardShortcuts?: { spotlight?: string; newConversation?: string; toggleSidebar?: string } }) =>
     ipcRenderer.invoke('save-settings', settings),
+
+  // MCP Server management
+  getMCPServers: () => ipcRenderer.invoke('get-mcp-servers'),
+  addMCPServer: (server: { name: string; command: string; args: string[]; env?: Record<string, string>; enabled: boolean }) =>
+    ipcRenderer.invoke('add-mcp-server', server),
+  updateMCPServer: (serverId: string, updates: { name?: string; command?: string; args?: string[]; env?: Record<string, string>; enabled?: boolean }) =>
+    ipcRenderer.invoke('update-mcp-server', serverId, updates),
+  removeMCPServer: (serverId: string) => ipcRenderer.invoke('remove-mcp-server', serverId),
+  toggleMCPServer: (serverId: string) => ipcRenderer.invoke('toggle-mcp-server', serverId),
+  getMCPTools: () => ipcRenderer.invoke('get-mcp-tools'),
+  getMCPServerStatus: () => ipcRenderer.invoke('get-mcp-server-status'),
+  executeMCPTool: (toolName: string, args: Record<string, unknown>) =>
+    ipcRenderer.invoke('execute-mcp-tool', toolName, args),
+
+  // Window management
+  newWindow: () => ipcRenderer.invoke('new-window'),
+  detachTab: (tabData: { conversationId: string | null; title: string }) =>
+    ipcRenderer.invoke('detach-tab', tabData),
+  getWindowCount: () => ipcRenderer.invoke('get-window-count'),
+  onReceiveTab: (callback: (data: { conversationId: string | null; title: string }) => void) => {
+    ipcRenderer.on('receive-tab', (_event, data) => callback(data));
+  },
+
+  // Permissions (macOS)
+  getPermissionStatus: () => ipcRenderer.invoke('get-permission-status'),
+  requestMediaAccess: (mediaType: 'camera' | 'microphone') =>
+    ipcRenderer.invoke('request-media-access', mediaType),
+  openPermissionSettings: (permission: 'screen' | 'accessibility' | 'files') =>
+    ipcRenderer.invoke('open-permission-settings', permission),
+  requestScreenCapture: () => ipcRenderer.invoke('request-screen-capture'),
+  getPlatform: () => ipcRenderer.invoke('get-platform'),
 });

@@ -1,50 +1,246 @@
-import { app, BrowserWindow, ipcMain, session, globalShortcut, screen, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, session, globalShortcut, screen, systemPreferences, desktopCapturer, shell,dialog } from 'electron';
+//import { app, BrowserWindow, ipcMain, session, globalShortcut, screen, dialog } from 'electron';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+
+// Permission types
+type MediaAccessStatus = 'not-determined' | 'granted' | 'denied' | 'restricted' | 'unknown';
+
+interface PermissionStatus {
+  camera: MediaAccessStatus;
+  microphone: MediaAccessStatus;
+  screen: MediaAccessStatus;
+  accessibility: boolean;
+}
+
+// Check all permissions
+function getPermissionStatus(): PermissionStatus {
+  if (process.platform !== 'darwin') {
+    return {
+      camera: 'granted',
+      microphone: 'granted',
+      screen: 'granted',
+      accessibility: true
+    };
+  }
+
+  return {
+    camera: systemPreferences.getMediaAccessStatus('camera'),
+    microphone: systemPreferences.getMediaAccessStatus('microphone'),
+    screen: systemPreferences.getMediaAccessStatus('screen'),
+    accessibility: systemPreferences.isTrustedAccessibilityClient(false)
+  };
+}
+
+// Request media access (camera/microphone)
+async function requestMediaAccess(mediaType: 'camera' | 'microphone'): Promise<boolean> {
+  if (process.platform !== 'darwin') return true;
+
+  const status = systemPreferences.getMediaAccessStatus(mediaType);
+  if (status === 'granted') return true;
+  if (status === 'denied' || status === 'restricted') {
+    // Open System Preferences
+    shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_' +
+      (mediaType === 'camera' ? 'Camera' : 'Microphone'));
+    return false;
+  }
+
+  return await systemPreferences.askForMediaAccess(mediaType);
+}
+
+// Open System Preferences for permissions that can't be requested programmatically
+function openPermissionSettings(permission: 'screen' | 'accessibility' | 'files'): void {
+  if (process.platform !== 'darwin') return;
+
+  const urls: Record<string, string> = {
+    screen: 'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture',
+    accessibility: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility',
+    files: 'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles'
+  };
+
+  shell.openExternal(urls[permission]);
+}
 import { isAuthenticated, getOrgId, makeRequest, streamCompletion, stopResponse, generateTitle, store, BASE_URL, prepareAttachmentPayload } from './api/client';
 import { createStreamState, processSSEChunk, type StreamCallbacks } from './streaming/parser';
-import type { SettingsSchema, AttachmentPayload, UploadFilePayload } from './types';
+import type { SettingsSchema, AttachmentPayload, UploadFilePayload, MCPServerConfig } from './types';
+import { mcpClient } from './mcp/client';
 
-let mainWindow: BrowserWindow | null = null;
+let mainWindows: BrowserWindow[] = [];
 let spotlightWindow: BrowserWindow | null = null;
 let settingsWindow: BrowserWindow | null = null;
+
+// Helper to get the focused main window or first one
+function getMainWindow(): BrowserWindow | null {
+  const focused = mainWindows.find(w => w.isFocused());
+  return focused || mainWindows[0] || null;
+}
+// Default keyboard shortcuts
+const DEFAULT_KEYBOARD_SHORTCUTS = {
+  spotlight: 'CommandOrControl+Shift+C',
+  newConversation: 'CommandOrControl+N',
+  toggleSidebar: 'CommandOrControl+B',
+};
 
 // Default settings
 const DEFAULT_SETTINGS: SettingsSchema = {
   spotlightKeybind: 'CommandOrControl+Shift+C',
   spotlightPersistHistory: true,
+  mcpServers: [],
+  keyboardShortcuts: DEFAULT_KEYBOARD_SHORTCUTS,
 };
+
+// Sanitize a single arg by stripping surrounding quotes
+function sanitizeArg(arg: string): string {
+  if (typeof arg !== 'string') return '';
+  // Strip surrounding single or double quotes
+  if ((arg.startsWith('"') && arg.endsWith('"')) ||
+      (arg.startsWith("'") && arg.endsWith("'"))) {
+    return arg.slice(1, -1);
+  }
+  return arg;
+}
+
+// Sanitize and validate MCP server configs
+function sanitizeMCPServers(servers: MCPServerConfig[]): MCPServerConfig[] {
+  if (!Array.isArray(servers)) return [];
+
+  return servers
+    .filter(server => server && typeof server === 'object')
+    .map(server => {
+      // Ensure id exists (generate one if missing so it can be deleted)
+      const id = (server.id && typeof server.id === 'string') ? server.id : crypto.randomUUID();
+      // Keep name/command even if empty (so user can see and delete bad entries)
+      const name = typeof server.name === 'string' ? server.name : '';
+      const command = typeof server.command === 'string' ? sanitizeArg(server.command) : '';
+      // Invalid if missing name or command
+      const isValid = name.length > 0 && command.length > 0;
+
+      return {
+        ...server,
+        id,
+        name,
+        command,
+        // Sanitize args array
+        args: Array.isArray(server.args)
+          ? server.args.map(a => typeof a === 'string' ? sanitizeArg(a) : '').filter(a => a.length > 0)
+          : [],
+        // Auto-disable invalid configs
+        enabled: isValid ? server.enabled === true : false,
+        // Ensure env is object or empty
+        env: (server.env && typeof server.env === 'object') ? server.env : {}
+      };
+    });
+}
 
 // Get settings with defaults
 function getSettings(): SettingsSchema {
   const stored = store.get('settings');
-  return { ...DEFAULT_SETTINGS, ...stored };
+  const settings = { ...DEFAULT_SETTINGS, ...stored };
+
+  // Sanitize MCP servers on load
+  if (settings.mcpServers) {
+    settings.mcpServers = sanitizeMCPServers(settings.mcpServers);
+  }
+
+  return settings;
 }
 
 // Save settings
 function saveSettings(settings: Partial<SettingsSchema>) {
   const current = getSettings();
-  store.set('settings', { ...current, ...settings });
+  const merged = { ...current, ...settings };
+
+  // Sanitize MCP servers before saving
+  if (merged.mcpServers) {
+    merged.mcpServers = sanitizeMCPServers(merged.mcpServers);
+  }
+
+  store.set('settings', merged);
 }
 
-// Register spotlight shortcut
-function registerSpotlightShortcut() {
+// Connect to all enabled MCP servers
+async function connectMCPServers(): Promise<void> {
+  const settings = getSettings();
+  const servers = settings.mcpServers || [];
+
+  // Disconnect all first
+  await mcpClient.disconnectAll();
+
+  // Connect to enabled servers
+  for (const server of servers) {
+    if (server.enabled) {
+      try {
+        await mcpClient.connect(server);
+      } catch (error) {
+        console.error(`[MCP] Failed to connect to ${server.name}:`, error);
+      }
+    }
+  }
+}
+
+// Get all available MCP tools for Claude API
+function getMCPToolsForAPI(): Array<{
+  name: string;
+  description: string;
+  input_schema: { type: string; properties?: Record<string, unknown>; required?: string[] };
+}> {
+  return mcpClient.getToolsForClaude();
+}
+
+// Register all keyboard shortcuts
+function registerKeyboardShortcuts() {
   globalShortcut.unregisterAll();
   const settings = getSettings();
-  const keybind = settings.spotlightKeybind || DEFAULT_SETTINGS.spotlightKeybind;
+  const shortcuts = settings.keyboardShortcuts || DEFAULT_KEYBOARD_SHORTCUTS;
 
+  // Register spotlight shortcut
+  const spotlightKey = shortcuts.spotlight || settings.spotlightKeybind || DEFAULT_KEYBOARD_SHORTCUTS.spotlight;
   try {
-    globalShortcut.register(keybind, () => {
+    globalShortcut.register(spotlightKey, () => {
       createSpotlightWindow();
     });
   } catch (e) {
-    // Fallback to default if custom keybind fails
-    console.error('Failed to register keybind:', keybind, e);
-    globalShortcut.register(DEFAULT_SETTINGS.spotlightKeybind, () => {
+    console.error('Failed to register spotlight keybind:', spotlightKey, e);
+    globalShortcut.register(DEFAULT_KEYBOARD_SHORTCUTS.spotlight, () => {
       createSpotlightWindow();
     });
   }
+
+  // Register new conversation shortcut
+  const newConvKey = shortcuts.newConversation || DEFAULT_KEYBOARD_SHORTCUTS.newConversation;
+  try {
+    globalShortcut.register(newConvKey, () => {
+      const win = mainWindows.find(w => !w.isDestroyed()) || mainWindows[0];
+      if (win && !win.isDestroyed()) {
+        win.webContents.send('new-conversation');
+        win.show();
+        win.focus();
+      }
+    });
+  } catch (e) {
+    console.error('Failed to register new conversation keybind:', newConvKey, e);
+  }
+
+  // Register toggle sidebar shortcut
+  const sidebarKey = shortcuts.toggleSidebar || DEFAULT_KEYBOARD_SHORTCUTS.toggleSidebar;
+  try {
+    globalShortcut.register(sidebarKey, () => {
+      const win = mainWindows.find(w => !w.isDestroyed()) || mainWindows[0];
+      if (win && !win.isDestroyed()) {
+        win.webContents.send('toggle-sidebar');
+        win.show();
+        win.focus();
+      }
+    });
+  } catch (e) {
+    console.error('Failed to register toggle sidebar keybind:', sidebarKey, e);
+  }
+}
+
+// Legacy function for compatibility
+function registerSpotlightShortcut() {
+  registerKeyboardShortcuts();
 }
 
 // Create spotlight search window
@@ -101,10 +297,9 @@ function createSpotlightWindow() {
   });
 }
 
-function createMainWindow() {
+function createMainWindow(): BrowserWindow {
   const isMac = process.platform === 'darwin';
-
-  mainWindow = new BrowserWindow({
+  const win = new BrowserWindow({
     width: 900,
     height: 700,
     ...(isMac ? {
@@ -124,7 +319,20 @@ function createMainWindow() {
     },
   });
 
-  mainWindow.loadFile(path.join(__dirname, '../static/index.html'));
+  win.loadFile(path.join(__dirname, '../static/index.html'));
+
+  // Track window
+  mainWindows.push(win);
+
+  // Remove from array when closed
+  win.on('closed', () => {
+    const index = mainWindows.indexOf(win);
+    if (index > -1) {
+      mainWindows.splice(index, 1);
+    }
+  });
+
+  return win;
 }
 
 // Create settings window
@@ -137,10 +345,11 @@ function createSettingsWindow() {
   const isMac = process.platform === 'darwin';
 
   settingsWindow = new BrowserWindow({
-    width: 480,
-    height: 520,
-    minWidth: 400,
-    minHeight: 400,
+    width: 900,
+    height: 720,
+    minWidth: 750,
+    minHeight: 600,
+    center: true,
     ...(isMac ? {
       transparent: true,
       vibrancy: 'under-window',
@@ -461,7 +670,7 @@ ipcMain.handle('export-conversation-markdown', async (_event, conversationData: 
   }
 
   // Show save dialog
-  const result = await dialog.showSaveDialog(mainWindow!, {
+  const result = await dialog.showSaveDialog(getMainWindow()!, {
     title: 'Export Conversation',
     defaultPath: `${title || 'conversation'}.md`,
     filters: [
@@ -496,7 +705,12 @@ ipcMain.handle('upload-attachments', async (_event, files: UploadFilePayload[]) 
 });
 
 // Send a message and stream response
-ipcMain.handle('send-message', async (_event, conversationId: string, message: string, parentMessageUuid: string, attachments: AttachmentPayload[] = []) => {
+interface MCPToolSelection {
+  serverId: string;
+  toolName: string;
+}
+
+ipcMain.handle('send-message', async (event, conversationId: string, message: string, parentMessageUuid: string, attachments: AttachmentPayload[] = [], mcpTools: MCPToolSelection[] = []) => {
   const orgId = await getOrgId();
   if (!orgId) throw new Error('Not authenticated');
 
@@ -507,19 +721,23 @@ ipcMain.handle('send-message', async (_event, conversationId: string, message: s
     console.log('[API] Attachments:', attachments.map(a => `${a.file_name} (${a.file_size})`).join(', '));
     console.log('[API] File IDs:', attachments.map(a => a.document_id).join(', '));
   }
+  if (mcpTools?.length) {
+    console.log('[API] Selected MCP tools:', mcpTools.map(t => `${t.serverId}:${t.toolName}`).join(', '));
+  }
 
   const state = createStreamState();
+  const sender = event.sender;
 
   const callbacks: StreamCallbacks = {
     onTextDelta: (text, fullText, blockIndex) => {
-      mainWindow?.webContents.send('message-stream', { conversationId, blockIndex, text, fullText });
+      sender.send('message-stream', { conversationId, blockIndex, text, fullText });
     },
     onThinkingStart: (blockIndex) => {
-      mainWindow?.webContents.send('message-thinking', { conversationId, blockIndex, isThinking: true });
+      sender.send('message-thinking', { conversationId, blockIndex, isThinking: true });
     },
     onThinkingDelta: (thinking, blockIndex) => {
       const block = state.contentBlocks.get(blockIndex);
-      mainWindow?.webContents.send('message-thinking-stream', {
+      sender.send('message-thinking-stream', {
         conversationId,
         blockIndex,
         thinking,
@@ -527,7 +745,7 @@ ipcMain.handle('send-message', async (_event, conversationId: string, message: s
       });
     },
     onThinkingStop: (thinkingText, summaries, blockIndex) => {
-      mainWindow?.webContents.send('message-thinking', {
+      sender.send('message-thinking', {
         conversationId,
         blockIndex,
         isThinking: false,
@@ -536,7 +754,7 @@ ipcMain.handle('send-message', async (_event, conversationId: string, message: s
       });
     },
     onToolStart: (toolName, toolMessage, blockIndex) => {
-      mainWindow?.webContents.send('message-tool-use', {
+      sender.send('message-tool-use', {
         conversationId,
         blockIndex,
         toolName,
@@ -546,7 +764,7 @@ ipcMain.handle('send-message', async (_event, conversationId: string, message: s
     },
     onToolStop: (toolName, input, blockIndex) => {
       const block = state.contentBlocks.get(blockIndex);
-      mainWindow?.webContents.send('message-tool-use', {
+      sender.send('message-tool-use', {
         conversationId,
         blockIndex,
         toolName,
@@ -556,7 +774,7 @@ ipcMain.handle('send-message', async (_event, conversationId: string, message: s
       });
     },
     onToolResult: (toolName, result, isError, blockIndex) => {
-      mainWindow?.webContents.send('message-tool-result', {
+      sender.send('message-tool-result', {
         conversationId,
         blockIndex,
         toolName,
@@ -565,16 +783,16 @@ ipcMain.handle('send-message', async (_event, conversationId: string, message: s
       });
     },
     onCitation: (citation, blockIndex) => {
-      mainWindow?.webContents.send('message-citation', { conversationId, blockIndex, citation });
+      sender.send('message-citation', { conversationId, blockIndex, citation });
     },
     onToolApproval: (toolName, approvalKey, input) => {
-      mainWindow?.webContents.send('message-tool-approval', { conversationId, toolName, approvalKey, input });
+      sender.send('message-tool-approval', { conversationId, toolName, approvalKey, input });
     },
     onCompaction: (status, compactionMessage) => {
-      mainWindow?.webContents.send('message-compaction', { conversationId, status, message: compactionMessage });
+      sender.send('message-compaction', { conversationId, status, message: compactionMessage });
     },
     onComplete: (fullText, steps, messageUuid) => {
-      mainWindow?.webContents.send('message-complete', { conversationId, fullText, steps, messageUuid });
+      sender.send('message-complete', { conversationId, fullText, steps, messageUuid });
     }
   };
 
@@ -626,24 +844,178 @@ ipcMain.handle('save-settings', async (_event, settings: Partial<SettingsSchema>
   return getSettings();
 });
 
+// Window management
+ipcMain.handle('new-window', async () => {
+  const win = createMainWindow();
+  return { windowId: win.id };
+});
+
+ipcMain.handle('detach-tab', async (_event, tabData: { conversationId: string | null; title: string }) => {
+  // Create a new window and send it the tab data
+  const win = createMainWindow();
+
+  // Wait for the window to load, then send the tab data
+  win.webContents.once('did-finish-load', () => {
+    win.webContents.send('receive-tab', tabData);
+  });
+
+  return { windowId: win.id };
+});
+
+ipcMain.handle('get-window-count', async () => {
+  return mainWindows.length;
+});
+
+// MCP Server management
+ipcMain.handle('get-mcp-servers', async () => {
+  const settings = getSettings();
+  return settings.mcpServers || [];
+});
+
+ipcMain.handle('add-mcp-server', async (_event, server: MCPServerConfig) => {
+  const settings = getSettings();
+  const mcpServers = [...(settings.mcpServers || []), { ...server, id: crypto.randomUUID() }];
+  saveSettings({ mcpServers });
+  // Reconnect MCP servers to pick up new server
+  await connectMCPServers();
+  return getSettings().mcpServers;
+});
+
+ipcMain.handle('update-mcp-server', async (_event, serverId: string, updates: Partial<MCPServerConfig>) => {
+  const settings = getSettings();
+  const mcpServers = (settings.mcpServers || []).map(s =>
+    s.id === serverId ? { ...s, ...updates } : s
+  );
+  saveSettings({ mcpServers });
+  // Reconnect MCP servers to apply updates
+  await connectMCPServers();
+  return getSettings().mcpServers;
+});
+
+ipcMain.handle('remove-mcp-server', async (_event, serverId: string) => {
+  const settings = getSettings();
+  const mcpServers = (settings.mcpServers || []).filter(s => s.id !== serverId);
+  saveSettings({ mcpServers });
+  // Reconnect MCP servers (will disconnect removed server)
+  await connectMCPServers();
+  return getSettings().mcpServers;
+});
+
+ipcMain.handle('toggle-mcp-server', async (_event, serverId: string) => {
+  const settings = getSettings();
+  const mcpServers = (settings.mcpServers || []).map(s =>
+    s.id === serverId ? { ...s, enabled: !s.enabled } : s
+  );
+  saveSettings({ mcpServers });
+  // Reconnect MCP servers to apply toggle
+  await connectMCPServers();
+  return getSettings().mcpServers;
+});
+
+// Get available MCP tools
+ipcMain.handle('get-mcp-tools', async () => {
+  return getMCPToolsForAPI();
+});
+
+// Get MCP server status (connection status and tools)
+ipcMain.handle('get-mcp-server-status', async () => {
+  const settings = getSettings();
+  const servers = settings.mcpServers || [];
+  const connections = mcpClient.getAllConnections();
+
+  return servers.map(server => {
+    const connection = connections.find(c => c.config.id === server.id);
+    return {
+      id: server.id,
+      name: server.name,
+      enabled: server.enabled,
+      isConnected: connection?.isConnected || false,
+      tools: connection?.tools || [],
+      error: connection ? null : (server.enabled ? 'Not connected' : null)
+    };
+  });
+});
+
+// Execute MCP tool
+ipcMain.handle('execute-mcp-tool', async (_event, toolName: string, args: Record<string, unknown>) => {
+  // Parse the tool name to find the server (format: mcp_serverName_toolName)
+  const parts = toolName.split('_');
+  if (parts.length < 3 || parts[0] !== 'mcp') {
+    throw new Error(`Invalid MCP tool name: ${toolName}`);
+  }
+
+  const serverName = parts[1];
+  const actualToolName = parts.slice(2).join('_');
+
+  // Find the server connection by name
+  const connections = mcpClient.getAllConnections();
+  const connection = connections.find(c => c.config.name === serverName);
+
+  if (!connection || !connection.isConnected) {
+    throw new Error(`MCP server ${serverName} is not connected`);
+  }
+
+  return await mcpClient.callTool(connection.config.id, actualToolName, args);
+});
+
+// Permission management
+ipcMain.handle('get-permission-status', async () => {
+  return getPermissionStatus();
+});
+
+ipcMain.handle('request-media-access', async (_event, mediaType: 'camera' | 'microphone') => {
+  return await requestMediaAccess(mediaType);
+});
+
+ipcMain.handle('open-permission-settings', async (_event, permission: 'screen' | 'accessibility' | 'files') => {
+  openPermissionSettings(permission);
+  return { success: true };
+});
+
+// Request screen capture access (via desktopCapturer)
+ipcMain.handle('request-screen-capture', async () => {
+  if (process.platform !== 'darwin') return { granted: true, sources: [] };
+
+  try {
+    // Attempting to get sources will prompt for permission on macOS
+    const sources = await desktopCapturer.getSources({ types: ['screen', 'window'] });
+    return {
+      granted: sources.length > 0,
+      sources: sources.map(s => ({ id: s.id, name: s.name, thumbnail: s.thumbnail.toDataURL() }))
+    };
+  } catch (error) {
+    console.error('[Permissions] Screen capture error:', error);
+    return { granted: false, sources: [], error: String(error) };
+  }
+});
+
+// Check if running on macOS
+ipcMain.handle('get-platform', async () => {
+  return process.platform;
+});
+
 // Handle deep link on Windows (single instance)
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
   app.quit();
 } else {
   app.on('second-instance', () => {
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.focus();
+    const win = getMainWindow();
+    if (win) {
+      if (win.isMinimized()) win.restore();
+      win.focus();
     }
   });
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   createMainWindow();
 
   // Register spotlight shortcut from settings
   registerSpotlightShortcut();
+
+  // Connect to MCP servers
+  await connectMCPServers();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -652,9 +1024,10 @@ app.whenReady().then(() => {
   });
 });
 
-// Unregister shortcuts when app quits
-app.on('will-quit', () => {
+// Unregister shortcuts and disconnect MCP when app quits
+app.on('will-quit', async () => {
   globalShortcut.unregisterAll();
+  await mcpClient.disconnectAll();
 });
 
 app.on('window-all-closed', () => {
