@@ -113,10 +113,18 @@ contextBridge.exposeInMainWorld('claude', {
     ipcRenderer.on('toggle-search-modal', () => callback());
   },
 
+  // Global keyboard shortcuts
+  onNewConversation: (callback: () => void) => {
+    ipcRenderer.on('new-conversation', () => callback());
+  },
+  onToggleSidebar: (callback: () => void) => {
+    ipcRenderer.on('toggle-sidebar', () => callback());
+  },
+
   // Settings functions
   openSettings: () => ipcRenderer.invoke('open-settings'),
   getSettings: () => ipcRenderer.invoke('get-settings'),
-  saveSettings: (settings: { spotlightKeybind?: string; spotlightPersistHistory?: boolean }) =>
+  saveSettings: (settings: { spotlightKeybind?: string; spotlightPersistHistory?: boolean; keyboardShortcuts?: { spotlight?: string; newConversation?: string; toggleSidebar?: string } }) =>
     ipcRenderer.invoke('save-settings', settings),
 
   // MCP Server management

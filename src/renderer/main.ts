@@ -41,6 +41,8 @@ declare global {
       newWindow: () => Promise<void>;
       detachTab: (tabData: { conversationId: string | null; title: string }) => Promise<void>;
       onReceiveTab: (callback: (data: { conversationId: string | null; title: string }) => void) => void;
+      onNewConversation: (callback: () => void) => void;
+      onToggleSidebar: (callback: () => void) => void;
     };
   }
 }
@@ -2169,6 +2171,15 @@ async function init() {
       const inputEl = $('input');
       if (inputEl) inputEl.focus();
     }
+  });
+
+  // Global keyboard shortcut handlers
+  window.claude.onNewConversation(() => {
+    newChat();
+  });
+
+  window.claude.onToggleSidebar(() => {
+    toggleSidebar();
   });
 }
 

@@ -7,12 +7,19 @@ export interface MCPServerConfig {
   env?: Record<string, string>;
   enabled: boolean;
 }
+// Keyboard shortcuts configuration
+export interface KeyboardShortcuts {
+  spotlight: string;
+  newConversation: string;
+  toggleSidebar: string;
+}
 
 // Settings schema
 export interface SettingsSchema {
   spotlightKeybind: string;
   spotlightPersistHistory: boolean;
   mcpServers: MCPServerConfig[];
+  keyboardShortcuts: KeyboardShortcuts;
 }
 
 // Store schema for electron-store
