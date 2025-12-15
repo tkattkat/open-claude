@@ -220,7 +220,7 @@ let isLoading = false;
 let currentStreamingElement: HTMLElement | null = null;
 let streamingMessageUuid: string | null = null;
 let conversations: Conversation[] = [];
-let selectedModel = 'claude-opus-4-5-20251101';
+let selectedModel = 'claude-sonnet-4-20250514';
 let openDropdownId: string | null = null;
 let pendingAttachments: UploadedAttachment[] = [];
 let uploadingAttachments = false;
@@ -236,8 +236,20 @@ let toolsPopupExpanded: Set<string> = new Set(); // Set of expanded serverIds
 
 const modelDisplayNames: Record<string, string> = {
   'claude-opus-4-5-20251101': 'Opus 4.5',
+  'claude-sonnet-4-20250514': 'Sonnet 4',
+  'claude-opus-4-20250514': 'Opus 4',
   'claude-sonnet-4-5-20250929': 'Sonnet 4.5',
-  'claude-haiku-4-5-20251001': 'Haiku 4.5'
+  'claude-haiku-4-5-20251001': 'Haiku 4.5',
+  'claude-3-5-haiku-20241022': 'Haiku 3.5'
+};
+
+const modelShortNames: Record<string, string> = {
+  'claude-opus-4-5-20251101': 'Opus 4.5',
+  'claude-sonnet-4-20250514': 'Sonnet 4',
+  'claude-opus-4-20250514': 'Opus 4',
+  'claude-sonnet-4-5-20250929': 'Sonnet 4.5',
+  'claude-haiku-4-5-20251001': 'Haiku 4.5',
+  'claude-3-5-haiku-20241022': 'Haiku 3.5'
 };
 
 const streamingBlocks = {
@@ -267,6 +279,22 @@ function formatFileSize(bytes: number): string {
   const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), sizes.length - 1);
   const value = bytes / Math.pow(1024, i);
   return `${value.toFixed(value >= 10 || i === 0 ? 0 : 1)} ${sizes[i]}`;
+}
+
+function formatRelativeTime(timestamp: string): string {
+  const now = new Date();
+  const date = new Date(timestamp);
+  const diffMs = now.getTime() - date.getTime();
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHour = Math.floor(diffMin / 60);
+  const diffDay = Math.floor(diffHour / 24);
+
+  if (diffSec < 60) return 'Just now';
+  if (diffMin < 60) return `${diffMin}m ago`;
+  if (diffHour < 24) return `${diffHour}h ago`;
+  if (diffDay < 7) return `${diffDay}d ago`;
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
 function removeAttachment(id: string) {
@@ -440,6 +468,7 @@ function showChat() {
 
 // Sidebar functions
 let sidebarWidth = 260;
+let sidebarPinned = false;
 const MIN_SIDEBAR_WIDTH = 200;
 const MAX_SIDEBAR_WIDTH = 400;
 
@@ -462,6 +491,9 @@ function toggleSidebar() {
 }
 
 function closeSidebar() {
+  // Don't close if sidebar is pinned
+  if (sidebarPinned) return;
+
   const sidebar = $('sidebar');
   const overlay = $('sidebar-overlay');
   const toggleBtns = document.querySelectorAll('.sidebar-toggle-btn');
@@ -469,6 +501,43 @@ function closeSidebar() {
   if (sidebar) sidebar.classList.remove('open');
   if (overlay) overlay.classList.remove('open');
   toggleBtns.forEach(btn => btn.classList.remove('active'));
+}
+
+function togglePinSidebar() {
+  sidebarPinned = !sidebarPinned;
+  const pinBtn = $('pin-sidebar-btn');
+  const sidebar = $('sidebar');
+  const overlay = $('sidebar-overlay');
+
+  if (pinBtn) {
+    pinBtn.classList.toggle('active', sidebarPinned);
+    pinBtn.title = sidebarPinned ? 'Unpin sidebar' : 'Pin sidebar';
+  }
+
+  if (sidebarPinned) {
+    // Add pinned classes to push content
+    document.body.classList.add('sidebar-pinned');
+    sidebar?.classList.add('pinned');
+    document.body.style.setProperty('--sidebar-width', `${sidebarWidth}px`);
+
+    // Ensure sidebar is visible
+    if (sidebar && !sidebar.classList.contains('open')) {
+      sidebar.classList.add('open');
+    }
+
+    // Hide overlay when pinned
+    overlay?.classList.remove('open');
+  } else {
+    // Remove pinned classes
+    document.body.classList.remove('sidebar-pinned');
+    sidebar?.classList.remove('pinned');
+
+    // Close sidebar when unpinning
+    if (sidebar) sidebar.classList.remove('open');
+    if (overlay) overlay.classList.remove('open');
+    const toggleBtns = document.querySelectorAll('.sidebar-toggle-btn');
+    toggleBtns.forEach(btn => btn.classList.remove('active'));
+  }
 }
 
 function initSidebarResize() {
@@ -492,6 +561,11 @@ function initSidebarResize() {
     const newWidth = Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, e.clientX));
     sidebarWidth = newWidth;
     sidebar.style.width = newWidth + 'px';
+
+    // Update CSS variable for pinned content margin
+    if (sidebarPinned) {
+      document.body.style.setProperty('--sidebar-width', `${newWidth}px`);
+    }
   });
 
   document.addEventListener('mouseup', () => {
@@ -618,6 +692,53 @@ function renderTabs() {
       }
     });
 
+    // Double-click to edit tab title
+    tabEl.addEventListener('dblclick', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const titleEl = tabEl.querySelector('.tab-title') as HTMLElement;
+      if (!titleEl) return;
+
+      const tab = tabs.find(t => t.id === tabId);
+      if (!tab) return;
+
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'tab-title-input';
+      input.value = tab.title;
+
+      const finishEdit = async () => {
+        const newTitle = input.value.trim() || 'New Chat';
+        tab.title = newTitle;
+        renderTabs();
+
+        // Update conversation name in backend and sidebar
+        if (tab.conversationId) {
+          try {
+            await window.claude.renameConversation(tab.conversationId, newTitle);
+            loadConversationsList(); // Refresh sidebar
+          } catch (e) {
+            console.error('Failed to rename conversation:', e);
+          }
+        }
+      };
+
+      input.addEventListener('blur', finishEdit);
+      input.addEventListener('keydown', (ke) => {
+        if (ke.key === 'Enter') {
+          ke.preventDefault();
+          input.blur();
+        } else if (ke.key === 'Escape') {
+          input.value = tab.title;
+          input.blur();
+        }
+      });
+
+      titleEl.replaceWith(input);
+      input.focus();
+      input.select();
+    });
+
     // Tab dragging
     tabEl.addEventListener('dragstart', (e) => {
       (tabEl as HTMLElement).classList.add('dragging');
@@ -693,10 +814,11 @@ function initTabs() {
 }
 
 // Model selection
-function selectModel(btn: HTMLElement) {
+function selectModelFromBtn(btn: HTMLElement) {
   $$('.model-option').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   selectedModel = btn.getAttribute('data-model') || selectedModel;
+  updateModelLabel();
 }
 
 // Conversations list
@@ -968,6 +1090,64 @@ function addMessage(role: string, content: string, raw = false, storedParentUuid
       startEditMessage(el);
     });
     el.appendChild(editBtn);
+  }
+
+  // Add assistant message footer with actions and metadata
+  if (role === 'assistant') {
+    const footer = document.createElement('div');
+    footer.className = 'message-footer';
+
+    // Model and timestamp info
+    const meta = document.createElement('div');
+    meta.className = 'message-meta';
+    const modelName = modelShortNames[selectedModel] || 'Claude';
+    const timestamp = new Date().toISOString();
+    meta.innerHTML = `<span class="message-model">${modelName}</span><span class="message-time" data-timestamp="${timestamp}">${formatRelativeTime(timestamp)}</span>`;
+    footer.appendChild(meta);
+
+    // Action buttons
+    const actions = document.createElement('div');
+    actions.className = 'message-actions';
+
+    // Copy button
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'message-action-btn copy-btn';
+    copyBtn.title = 'Copy';
+    copyBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
+    copyBtn.addEventListener('click', () => {
+      const text = c.innerText || c.textContent || '';
+      navigator.clipboard.writeText(text);
+      copyBtn.classList.add('copied');
+      copyBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+      setTimeout(() => {
+        copyBtn.classList.remove('copied');
+        copyBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
+      }, 2000);
+    });
+    actions.appendChild(copyBtn);
+
+    // Regenerate button
+    const regenBtn = document.createElement('button');
+    regenBtn.className = 'message-action-btn regen-btn';
+    regenBtn.title = 'Regenerate';
+    regenBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>`;
+    regenBtn.addEventListener('click', () => {
+      // Get the last user message and resend
+      const msgs = document.querySelectorAll('.message.user');
+      const lastUserMsg = msgs[msgs.length - 1];
+      if (lastUserMsg) {
+        const userText = lastUserMsg.dataset.originalText || lastUserMsg.querySelector('.message-content')?.textContent || '';
+        if (userText) {
+          // Remove current assistant message and regenerate
+          el.remove();
+          sendMessage(userText);
+        }
+      }
+    });
+    actions.appendChild(regenBtn);
+
+    footer.appendChild(actions);
+    el.appendChild(footer);
   }
 
   const messages = $('messages');
@@ -2032,6 +2212,46 @@ function toggleToolsPopup() {
   btn?.classList.toggle('active', !isVisible);
 }
 
+function toggleModelPopup() {
+  const popup = $('model-popup');
+  const btn = $('model-btn');
+  if (!popup) return;
+
+  const isVisible = popup.style.display !== 'none';
+  popup.style.display = isVisible ? 'none' : 'block';
+  btn?.classList.toggle('active', !isVisible);
+}
+
+function updateModelLabel() {
+  const label = $('model-label');
+  if (label) {
+    label.textContent = modelShortNames[selectedModel] || 'Sonnet 4';
+  }
+}
+
+function selectModel(modelId: string) {
+  selectedModel = modelId;
+  updateModelLabel();
+
+  // Update model badge in tab bar
+  const modelBadge = document.querySelector('.model-badge');
+  if (modelBadge) {
+    modelBadge.textContent = modelDisplayNames[selectedModel] || 'Sonnet 4';
+  }
+
+  // Update active state in popup
+  document.querySelectorAll('.model-option').forEach(opt => {
+    const optModel = (opt as HTMLElement).dataset.model;
+    opt.classList.toggle('active', optModel === modelId);
+  });
+
+  // Close popup
+  const popup = $('model-popup');
+  const btn = $('model-btn');
+  if (popup) popup.style.display = 'none';
+  btn?.classList.remove('active');
+}
+
 function getSelectedMCPTools(): Array<{ serverId: string; toolName: string }> {
   const tools: Array<{ serverId: string; toolName: string }> = [];
 
@@ -2183,20 +2403,236 @@ async function init() {
   });
 }
 
+// Autocomplete system for @ files and / commands
+interface AutocompleteItem {
+  type: 'file' | 'command';
+  name: string;
+  description: string;
+  value: string;
+}
+
+// Available commands
+const availableCommands: AutocompleteItem[] = [
+  { type: 'command', name: '/clear', description: 'Clear the conversation', value: '/clear' },
+  { type: 'command', name: '/new', description: 'Start a new chat', value: '/new' },
+  { type: 'command', name: '/help', description: 'Show available commands', value: '/help' },
+  { type: 'command', name: '/settings', description: 'Open settings', value: '/settings' },
+  { type: 'command', name: '/model', description: 'Change model', value: '/model ' },
+];
+
+const fileSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>`;
+const commandSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>`;
+
+let autocompleteState: {
+  active: boolean;
+  type: '@' | '/' | null;
+  query: string;
+  startPos: number;
+  selectedIndex: number;
+  items: AutocompleteItem[];
+  input: HTMLTextAreaElement | null;
+  popup: HTMLElement | null;
+} = {
+  active: false,
+  type: null,
+  query: '',
+  startPos: 0,
+  selectedIndex: 0,
+  items: [],
+  input: null,
+  popup: null,
+};
+
+function showAutocomplete(input: HTMLTextAreaElement, popup: HTMLElement, type: '@' | '/', startPos: number) {
+  autocompleteState = {
+    active: true,
+    type,
+    query: '',
+    startPos,
+    selectedIndex: 0,
+    items: [],
+    input,
+    popup,
+  };
+  updateAutocompleteItems('');
+}
+
+function hideAutocomplete() {
+  if (autocompleteState.popup) {
+    autocompleteState.popup.style.display = 'none';
+  }
+  autocompleteState = {
+    active: false,
+    type: null,
+    query: '',
+    startPos: 0,
+    selectedIndex: 0,
+    items: [],
+    input: null,
+    popup: null,
+  };
+}
+
+function updateAutocompleteItems(query: string) {
+  autocompleteState.query = query;
+  const lowerQuery = query.toLowerCase();
+
+  if (autocompleteState.type === '/') {
+    autocompleteState.items = availableCommands.filter(cmd =>
+      cmd.name.toLowerCase().includes(lowerQuery) ||
+      cmd.description.toLowerCase().includes(lowerQuery)
+    );
+  } else if (autocompleteState.type === '@') {
+    // For @ mentions, show file path input hint
+    autocompleteState.items = [
+      { type: 'file', name: 'Type a file path...', description: 'Reference a file in your message', value: query || '' },
+    ];
+  }
+
+  autocompleteState.selectedIndex = 0;
+  renderAutocomplete();
+}
+
+function renderAutocomplete() {
+  const { popup, items, selectedIndex, type } = autocompleteState;
+  if (!popup) return;
+
+  const list = popup.querySelector('.autocomplete-list');
+  if (!list) return;
+
+  if (items.length === 0) {
+    list.innerHTML = '<div class="autocomplete-empty">No matches found</div>';
+    popup.style.display = 'block';
+    return;
+  }
+
+  const header = type === '/' ? 'Commands' : 'Files';
+  const icon = type === '/' ? commandSvg : fileSvg;
+
+  list.innerHTML = `
+    <div class="autocomplete-header">${header}</div>
+    ${items.map((item, idx) => `
+      <div class="autocomplete-item ${idx === selectedIndex ? 'selected' : ''}" data-index="${idx}">
+        <div class="autocomplete-icon">${icon}</div>
+        <div class="autocomplete-content">
+          <div class="autocomplete-name">${escapeHtml(item.name)}</div>
+          <div class="autocomplete-desc">${escapeHtml(item.description)}</div>
+        </div>
+      </div>
+    `).join('')}
+  `;
+
+  // Add click handlers
+  list.querySelectorAll('.autocomplete-item').forEach((el) => {
+    el.addEventListener('click', () => {
+      const idx = parseInt(el.getAttribute('data-index') || '0');
+      selectAutocompleteItem(idx);
+    });
+  });
+
+  popup.style.display = 'block';
+}
+
+function selectAutocompleteItem(idx: number) {
+  const { input, items, startPos, type } = autocompleteState;
+  if (!input || idx >= items.length) return;
+
+  const item = items[idx];
+  const value = input.value;
+  const before = value.slice(0, startPos);
+  const after = value.slice(input.selectionStart);
+
+  // For commands, replace from / to cursor
+  // For files, insert @path
+  if (type === '/') {
+    input.value = before + item.value + after;
+    input.selectionStart = input.selectionEnd = before.length + item.value.length;
+  } else {
+    // For @ files, if there's a query, use it; otherwise show hint
+    const filePath = item.value || '';
+    input.value = before + '@' + filePath + after;
+    input.selectionStart = input.selectionEnd = before.length + 1 + filePath.length;
+  }
+
+  hideAutocomplete();
+  input.focus();
+}
+
+function handleAutocompleteKeydown(e: KeyboardEvent): boolean {
+  if (!autocompleteState.active) return false;
+
+  const { items, selectedIndex } = autocompleteState;
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    autocompleteState.selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
+    renderAutocomplete();
+    return true;
+  }
+
+  if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    autocompleteState.selectedIndex = Math.max(selectedIndex - 1, 0);
+    renderAutocomplete();
+    return true;
+  }
+
+  if (e.key === 'Enter' || e.key === 'Tab') {
+    e.preventDefault();
+    selectAutocompleteItem(selectedIndex);
+    return true;
+  }
+
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    hideAutocomplete();
+    return true;
+  }
+
+  return false;
+}
+
+function handleAutocompleteInput(input: HTMLTextAreaElement, popup: HTMLElement) {
+  const value = input.value;
+  const cursorPos = input.selectionStart;
+
+  // Check for @ or / trigger
+  if (autocompleteState.active) {
+    // Update query based on current position
+    const query = value.slice(autocompleteState.startPos + 1, cursorPos);
+    if (cursorPos <= autocompleteState.startPos) {
+      hideAutocomplete();
+    } else {
+      updateAutocompleteItems(query);
+    }
+  } else {
+    // Check for new @ or / trigger
+    const lastChar = value[cursorPos - 1];
+    const charBefore = value[cursorPos - 2];
+
+    // Trigger on @ or / at start of line or after space
+    if ((lastChar === '@' || lastChar === '/') && (!charBefore || charBefore === ' ' || charBefore === '\n')) {
+      showAutocomplete(input, popup, lastChar as '@' | '/', cursorPos - 1);
+    }
+  }
+}
+
 // Set up event listeners
 function setupEventListeners() {
   // Login button
   $('login-btn')?.addEventListener('click', login);
 
-  // Logout buttons (home and chat views)
+  // Logout button (home view only)
   $('logout-btn')?.addEventListener('click', logout);
-  $('chat-logout-btn')?.addEventListener('click', logout);
 
   // New chat button
   $('new-chat-btn')?.addEventListener('click', newChat);
 
-  // Settings button
+  // Settings buttons (sidebar and tab bar)
   $('settings-btn')?.addEventListener('click', () => {
+    window.claude.openSettings();
+  });
+  $('tab-bar-settings-btn')?.addEventListener('click', () => {
     window.claude.openSettings();
   });
 
@@ -2211,37 +2647,62 @@ function setupEventListeners() {
   // New tab button
   $('new-tab-btn')?.addEventListener('click', newTab);
 
-  // New window button
+  // New window buttons (tab bar and sidebar)
   $('new-window-btn')?.addEventListener('click', async () => {
     await window.claude.newWindow();
   });
-
-  // Model selection
-  $$('.model-option').forEach(btn => {
-    btn.addEventListener('click', () => selectModel(btn as HTMLElement));
+  $('sidebar-new-window-btn')?.addEventListener('click', async () => {
+    await window.claude.newWindow();
   });
 
-  // Home input
+  // Model selection (home page - legacy)
+  $$('.home-model-option').forEach(btn => {
+    btn.addEventListener('click', () => selectModelFromBtn(btn as HTMLElement));
+  });
+
+  // Home input with autocomplete
   const homeInput = $('home-input') as HTMLTextAreaElement;
-  homeInput?.addEventListener('input', () => autoResizeHome(homeInput));
+  const homeAutocompletePopup = $('home-autocomplete-popup');
+  homeInput?.addEventListener('input', () => {
+    autoResizeHome(homeInput);
+    if (homeAutocompletePopup) {
+      handleAutocompleteInput(homeInput, homeAutocompletePopup);
+    }
+  });
   homeInput?.addEventListener('keydown', (e) => {
+    if (handleAutocompleteKeydown(e)) return;
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendFromHome();
     }
   });
+  homeInput?.addEventListener('blur', () => {
+    // Delay to allow click on popup items
+    setTimeout(() => hideAutocomplete(), 150);
+  });
 
   // Home send button
   $('home-send-btn')?.addEventListener('click', sendFromHome);
 
-  // Chat input
+  // Chat input with autocomplete
   const chatInput = $('input') as HTMLTextAreaElement;
-  chatInput?.addEventListener('input', () => autoResize(chatInput));
+  const chatAutocompletePopup = $('chat-autocomplete-popup');
+  chatInput?.addEventListener('input', () => {
+    autoResize(chatInput);
+    if (chatAutocompletePopup) {
+      handleAutocompleteInput(chatInput, chatAutocompletePopup);
+    }
+  });
   chatInput?.addEventListener('keydown', (e) => {
+    if (handleAutocompleteKeydown(e)) return;
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
     }
+  });
+  chatInput?.addEventListener('blur', () => {
+    // Delay to allow click on popup items
+    setTimeout(() => hideAutocomplete(), 150);
   });
 
   // Attachment buttons
@@ -2280,6 +2741,39 @@ function setupEventListeners() {
       btn?.classList.remove('active');
     }
   });
+
+  // Model selector popup
+  $('model-btn')?.addEventListener('click', toggleModelPopup);
+  $('model-popup-close')?.addEventListener('click', () => {
+    const popup = $('model-popup');
+    const btn = $('model-btn');
+    if (popup) popup.style.display = 'none';
+    btn?.classList.remove('active');
+  });
+
+  // Model option selection
+  document.querySelectorAll('.model-option').forEach(opt => {
+    opt.addEventListener('click', () => {
+      const modelId = (opt as HTMLElement).dataset.model;
+      if (modelId) selectModel(modelId);
+    });
+  });
+
+  // Close model popup when clicking outside
+  document.addEventListener('click', (e) => {
+    const popup = $('model-popup');
+    const btn = $('model-btn');
+    const target = e.target as HTMLElement;
+
+    if (popup && popup.style.display !== 'none' &&
+        !popup.contains(target) && !btn?.contains(target)) {
+      popup.style.display = 'none';
+      btn?.classList.remove('active');
+    }
+  });
+
+  // Initialize model label
+  updateModelLabel();
 
   // Keyboard shortcuts
   document.addEventListener('keydown', (e) => {

@@ -142,6 +142,7 @@
     }
 
     .home-input-wrapper {
+      position: relative;
       background: transparent;
       padding: 0;
     }
@@ -370,11 +371,11 @@
     .tab-bar {
       display: flex;
       align-items: center;
-      height: 36px;
-      padding: 4px 8px 0 80px;
+      height: 40px;
+      padding: 0 8px 0 80px;
       background: transparent;
       -webkit-app-region: drag;
-      gap: 2px;
+      gap: 4px;
       overflow-x: auto;
       overflow-y: hidden;
     }
@@ -383,11 +384,12 @@
 
     #tabs-container {
       display: flex;
-      gap: 2px;
+      gap: 4px;
       flex: 1;
       min-width: 0;
       overflow-x: auto;
       overflow-y: hidden;
+      align-items: center;
     }
 
     #tabs-container::-webkit-scrollbar { display: none; }
@@ -395,15 +397,15 @@
     .tab {
       display: flex;
       align-items: center;
+      justify-content: center;
       gap: 6px;
-      padding: 6px 12px;
-      max-width: 180px;
-      min-width: 100px;
-      height: 28px;
+      padding: 4px 12px;
+      flex: 1;
+      min-width: 80px;
+      height: 26px;
       background: rgba(0, 0, 0, 0.04);
       border: 1px solid rgba(0, 0, 0, 0.06);
-      border-bottom: none;
-      border-radius: 8px 8px 0 0;
+      border-radius: 9999px;
       cursor: pointer;
       -webkit-app-region: no-drag;
       transition: all 0.15s;
@@ -415,8 +417,9 @@
     }
 
     .tab.active {
-      background: rgba(255, 255, 255, 0.8);
+      background: rgba(255, 255, 255, 0.9);
       border-color: rgba(0, 0, 0, 0.1);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
     }
 
     .tab.dragging {
@@ -424,13 +427,13 @@
     }
 
     .tab-title {
-      flex: 1;
       font-size: 12px;
       font-weight: 500;
       color: rgba(0, 0, 0, 0.6);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      text-align: center;
     }
 
     .tab.active .tab-title {
@@ -438,9 +441,11 @@
     }
 
     .tab-close {
+      position: absolute;
+      right: 6px;
       width: 16px;
       height: 16px;
-      border-radius: 4px;
+      border-radius: 9999px;
       border: none;
       background: transparent;
       color: rgba(0, 0, 0, 0.3);
@@ -463,13 +468,25 @@
       color: rgba(0, 0, 0, 0.7);
     }
 
-    .new-tab-btn {
-      width: 24px;
-      height: 24px;
-      border-radius: 6px;
-      border: none;
+    .tab-title-input {
       background: transparent;
-      color: rgba(0, 0, 0, 0.4);
+      border: none;
+      outline: none;
+      font-size: 12px;
+      font-weight: 500;
+      color: rgba(0, 0, 0, 0.85);
+      text-align: center;
+      width: 100%;
+      padding: 0;
+    }
+
+    .new-tab-btn {
+      width: 26px;
+      height: 26px;
+      border-radius: 9999px;
+      border: 1px solid rgba(0, 0, 0, 0.06);
+      background: rgba(0, 0, 0, 0.04);
+      color: rgba(0, 0, 0, 0.5);
       font-size: 16px;
       display: flex;
       align-items: center;
@@ -483,15 +500,6 @@
     .new-tab-btn:hover {
       background: rgba(0, 0, 0, 0.08);
       color: rgba(0, 0, 0, 0.7);
-    }
-
-    .tab-bar-actions {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      margin-left: auto;
-      padding-left: 8px;
-      -webkit-app-region: no-drag;
     }
 
     /* Header */
@@ -557,23 +565,6 @@
       font-weight: 500;
     }
 
-    .sign-out-btn {
-      background: transparent;
-      border: none;
-      color: rgba(0, 0, 0, 0.4);
-      padding: 4px 8px;
-      border-radius: 4px;
-      font-size: 11px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.15s;
-    }
-
-    .sign-out-btn:hover {
-      background: rgba(0, 0, 0, 0.06);
-      color: rgba(0, 0, 0, 0.7);
-    }
-
     /* Sidebar overlay */
     .sidebar-overlay {
       position: fixed;
@@ -615,8 +606,36 @@
       transform: translateX(0);
     }
 
+    .sidebar.pinned {
+      transform: translateX(0);
+    }
+
     .sidebar.resizing {
       transition: none;
+    }
+
+    /* When sidebar is pinned, push content over */
+    body.sidebar-pinned .chat-container,
+    body.sidebar-pinned .home-container {
+      margin-left: var(--sidebar-width, 260px);
+      transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    body.sidebar-pinned .tab-bar {
+      padding-left: 12px;
+    }
+
+    body.sidebar-pinned .home-drag-region {
+      left: 12px;
+    }
+
+    body.sidebar-pinned .home-header-left {
+      left: 16px;
+    }
+
+    /* Hide overlay when pinned */
+    body.sidebar-pinned .sidebar-overlay {
+      display: none;
     }
 
     /* Sidebar resize handle */
@@ -675,6 +694,14 @@
     .settings-btn:hover {
       background: rgba(0, 0, 0, 0.08);
       color: rgba(0, 0, 0, 0.6);
+    }
+
+    .pin-btn.active {
+      background: rgba(204, 120, 92, 0.12);
+      color: #CC785C;
+    }
+    .pin-btn.active:hover {
+      background: rgba(204, 120, 92, 0.18);
     }
 
     .new-chat-btn {
@@ -881,6 +908,7 @@
       flex: 1;
       overflow-y: auto;
       padding: 20px;
+      padding-top: 24px;
       display: flex;
       flex-direction: column;
       gap: 16px;
@@ -1036,7 +1064,81 @@
       color: #9a5d3a;
     }
     .message.user .message-content code { background: rgba(255, 255, 255, 0.2); color: #fff; }
-    .message-content pre {
+
+    /* Code block wrapper with syntax highlighting */
+    .code-block-wrapper {
+      margin: 12px 0;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid rgba(0, 0, 0, 0.1);
+      background: #1e1e1e;
+    }
+    .code-block-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      background: rgba(0, 0, 0, 0.2);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .code-lang {
+      font-family: 'SF Mono', Menlo, monospace;
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.5);
+      text-transform: uppercase;
+    }
+    .code-copy-btn {
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 11px;
+      padding: 4px 10px;
+      border-radius: 4px;
+      border: none;
+      background: rgba(255, 255, 255, 0.1);
+      color: rgba(255, 255, 255, 0.7);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .code-copy-btn:hover {
+      background: rgba(255, 255, 255, 0.15);
+      color: rgba(255, 255, 255, 0.9);
+    }
+    .code-block-wrapper pre {
+      margin: 0;
+      padding: 12px 16px;
+      background: transparent;
+      border: none;
+      border-radius: 0;
+    }
+    .code-block-wrapper pre code {
+      font-family: 'SF Mono', Menlo, Consolas, monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      background: transparent;
+      padding: 0;
+      color: #d4d4d4;
+    }
+
+    /* Highlight.js syntax theme (VS Code Dark+) */
+    .hljs { color: #d4d4d4; }
+    .hljs-comment, .hljs-quote { color: #6a9955; font-style: italic; }
+    .hljs-keyword, .hljs-selector-tag { color: #569cd6; }
+    .hljs-string, .hljs-template-variable, .hljs-addition { color: #ce9178; }
+    .hljs-number, .hljs-literal { color: #b5cea8; }
+    .hljs-type, .hljs-built_in, .hljs-class .hljs-title { color: #4ec9b0; }
+    .hljs-function, .hljs-title { color: #dcdcaa; }
+    .hljs-variable, .hljs-attribute { color: #9cdcfe; }
+    .hljs-property { color: #9cdcfe; }
+    .hljs-params { color: #9cdcfe; }
+    .hljs-regexp, .hljs-link { color: #d16969; }
+    .hljs-symbol, .hljs-bullet { color: #d4d4d4; }
+    .hljs-meta { color: #d7ba7d; }
+    .hljs-deletion { color: #ce9178; background: rgba(206, 145, 120, 0.1); }
+    .hljs-addition { background: rgba(155, 185, 85, 0.1); }
+    .hljs-emphasis { font-style: italic; }
+    .hljs-strong { font-weight: bold; }
+
+    /* Fallback for simple pre/code without wrapper */
+    .message-content pre:not(.code-block-wrapper pre) {
       background: rgba(0, 0, 0, 0.05);
       border: 1px solid rgba(0, 0, 0, 0.1);
       border-radius: 10px;
@@ -1044,7 +1146,7 @@
       overflow-x: auto;
       margin: 8px 0;
     }
-    .message-content pre code { background: transparent; padding: 0; font-size: 12px; line-height: 1.5; color: #333; }
+    .message-content pre:not(.code-block-wrapper pre) code { background: transparent; padding: 0; font-size: 12px; line-height: 1.5; color: #333; }
     .message-content ul, .message-content ol { margin: 6px 0; padding-left: 20px; }
     .message-content li { margin: 2px 0; }
     .message-content blockquote {
@@ -1060,6 +1162,60 @@
       border: none;
       border-top: 1px solid rgba(0, 0, 0, 0.12);
       margin: 12px 0;
+    }
+
+    /* Message footer with actions */
+    .message-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 8px;
+      padding-top: 4px;
+    }
+    .message-actions {
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .message:hover .message-actions {
+      opacity: 1;
+    }
+    .message-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      color: rgba(0, 0, 0, 0.4);
+    }
+    .message-model {
+      font-weight: 500;
+      color: rgba(0, 0, 0, 0.5);
+    }
+    .message-time {
+      color: rgba(0, 0, 0, 0.35);
+    }
+    .message-actions {
+      display: flex;
+      gap: 4px;
+    }
+    .message-action-btn {
+      width: 28px;
+      height: 28px;
+      border: none;
+      background: transparent;
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: rgba(0, 0, 0, 0.35);
+      transition: all 0.15s;
+    }
+    .message-action-btn:hover {
+      background: rgba(0, 0, 0, 0.06);
+      color: rgba(0, 0, 0, 0.65);
+    }
+    .message-action-btn.copied {
+      color: #34C759;
     }
 
     /* Citation styling */
@@ -1094,6 +1250,7 @@
     }
 
     .input-wrapper {
+      position: relative;
       display: flex;
       gap: 8px;
       align-items: flex-end;
@@ -1212,6 +1369,100 @@
       padding: 20px;
       color: rgba(0, 0, 0, 0.4);
       font-size: 13px;
+    }
+
+    /* Model selector */
+    .model-btn-container {
+      position: relative;
+    }
+
+    .model-label {
+      font-size: 11px;
+      color: rgba(0, 0, 0, 0.35);
+      margin-right: 8px;
+      white-space: nowrap;
+    }
+
+    .model-popup {
+      position: absolute;
+      bottom: 100%;
+      left: 0;
+      margin-bottom: 8px;
+      width: 220px;
+      background: rgba(255, 255, 255, 0.98);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-radius: 12px;
+      border: 1px solid rgba(0, 0, 0, 0.1);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+      overflow: hidden;
+      z-index: 1000;
+    }
+
+    .model-popup-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+      font-size: 13px;
+      font-weight: 600;
+      color: rgba(0, 0, 0, 0.7);
+    }
+
+    .model-popup-close {
+      width: 20px;
+      height: 20px;
+      border: none;
+      background: transparent;
+      font-size: 16px;
+      color: rgba(0, 0, 0, 0.4);
+      cursor: pointer;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .model-popup-close:hover {
+      background: rgba(0, 0, 0, 0.06);
+    }
+
+    .model-popup-content {
+      padding: 8px;
+    }
+
+    .model-option {
+      display: flex;
+      flex-direction: column;
+      padding: 10px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .model-option:hover {
+      background: rgba(0, 0, 0, 0.04);
+    }
+
+    .model-option.active {
+      background: rgba(204, 120, 92, 0.12);
+    }
+
+    .model-option-name {
+      font-size: 13px;
+      font-weight: 500;
+      color: rgba(0, 0, 0, 0.85);
+    }
+
+    .model-option.active .model-option-name {
+      color: #CC785C;
+    }
+
+    .model-option-desc {
+      font-size: 11px;
+      color: rgba(0, 0, 0, 0.45);
+      margin-top: 2px;
     }
 
     .tools-server {
@@ -1534,6 +1785,83 @@
 
     .input-area textarea::placeholder { color: rgba(0, 0, 0, 0.4); }
     .input-area textarea:focus { outline: none; }
+
+    /* Autocomplete popup for @ files and / commands */
+    .autocomplete-popup {
+      position: absolute;
+      bottom: 100%;
+      left: 0;
+      right: 0;
+      background: rgba(255, 255, 255, 0.98);
+      border: 1px solid rgba(0, 0, 0, 0.12);
+      border-radius: 10px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+      max-height: 200px;
+      overflow-y: auto;
+      margin-bottom: 8px;
+      z-index: 1000;
+    }
+    .autocomplete-list {
+      padding: 4px;
+    }
+    .autocomplete-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      cursor: pointer;
+      border-radius: 6px;
+      transition: background 0.15s;
+    }
+    .autocomplete-item:hover,
+    .autocomplete-item.selected {
+      background: rgba(204, 120, 92, 0.12);
+    }
+    .autocomplete-icon {
+      width: 20px;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: rgba(0, 0, 0, 0.5);
+      flex-shrink: 0;
+    }
+    .autocomplete-icon svg {
+      width: 16px;
+      height: 16px;
+    }
+    .autocomplete-content {
+      flex: 1;
+      min-width: 0;
+    }
+    .autocomplete-name {
+      font-size: 13px;
+      font-weight: 500;
+      color: rgba(0, 0, 0, 0.8);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .autocomplete-desc {
+      font-size: 11px;
+      color: rgba(0, 0, 0, 0.5);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .autocomplete-header {
+      padding: 8px 12px 4px;
+      font-size: 11px;
+      font-weight: 600;
+      color: rgba(0, 0, 0, 0.4);
+      text-transform: uppercase;
+    }
+    .autocomplete-empty {
+      padding: 12px;
+      text-align: center;
+      color: rgba(0, 0, 0, 0.4);
+      font-size: 13px;
+    }
 
     .message-attachments {
       margin-top: 8px;
@@ -2220,13 +2548,8 @@
         background: rgba(255, 255, 255, 0.1);
         color: rgba(255, 255, 255, 0.8);
       }
-      .model-badge { color: rgba(255, 255, 255, 0.4); }
-      .sign-out-btn {
-        color: rgba(255, 255, 255, 0.4);
-      }
-      .sign-out-btn:hover {
-        background: rgba(255, 255, 255, 0.1);
-        color: rgba(255, 255, 255, 0.8);
+      .tab-title-input {
+        color: rgba(255, 255, 255, 0.9);
       }
 
       .sidebar {
@@ -2237,6 +2560,8 @@
       .sidebar-title { color: rgba(255, 255, 255, 0.6); }
       .settings-btn { color: rgba(255, 255, 255, 0.4); }
       .settings-btn:hover { background: rgba(255, 255, 255, 0.1); color: rgba(255, 255, 255, 0.7); }
+      .pin-btn.active { background: rgba(204, 120, 92, 0.2); color: #E8A07A; }
+      .pin-btn.active:hover { background: rgba(204, 120, 92, 0.25); }
       .sidebar-tab-indicator {
         background: rgba(255, 255, 255, 0.08);
       }
@@ -2289,10 +2614,16 @@
         color: #fff;
       }
       .message-content code { background: rgba(0, 0, 0, 0.3); color: #E8C4A0; }
-      .message-content pre { background: rgba(0, 0, 0, 0.4); border-color: rgba(255, 255, 255, 0.1); }
-      .message-content pre code { color: rgba(255, 255, 255, 0.9); }
+      .code-block-wrapper { border-color: rgba(255, 255, 255, 0.15); }
+      .message-content pre:not(.code-block-wrapper pre) { background: rgba(0, 0, 0, 0.4); border-color: rgba(255, 255, 255, 0.1); }
+      .message-content pre:not(.code-block-wrapper pre) code { color: rgba(255, 255, 255, 0.9); }
       .message-content a { color: #E8C4A0; }
       .message-content hr { border-top-color: rgba(255, 255, 255, 0.15); }
+      .message-meta { color: rgba(255, 255, 255, 0.4); }
+      .message-model { color: rgba(255, 255, 255, 0.5); }
+      .message-time { color: rgba(255, 255, 255, 0.35); }
+      .message-action-btn { color: rgba(255, 255, 255, 0.35); }
+      .message-action-btn:hover { background: rgba(255, 255, 255, 0.1); color: rgba(255, 255, 255, 0.7); }
 
       .input-area {
         background: rgba(255, 255, 255, 0.06);
@@ -2305,6 +2636,19 @@
       .input-wrapper:focus-within { background: rgba(255, 255, 255, 0.12); }
       .input-area textarea { color: #fff; }
       .input-area textarea::placeholder { color: rgba(255, 255, 255, 0.4); }
+      .autocomplete-popup {
+        background: rgba(40, 40, 40, 0.98);
+        border-color: rgba(255, 255, 255, 0.15);
+      }
+      .autocomplete-item:hover,
+      .autocomplete-item.selected {
+        background: rgba(204, 120, 92, 0.2);
+      }
+      .autocomplete-icon { color: rgba(255, 255, 255, 0.5); }
+      .autocomplete-name { color: rgba(255, 255, 255, 0.9); }
+      .autocomplete-desc { color: rgba(255, 255, 255, 0.5); }
+      .autocomplete-header { color: rgba(255, 255, 255, 0.4); }
+      .autocomplete-empty { color: rgba(255, 255, 255, 0.4); }
       .attach-btn {
         color: rgba(255, 255, 255, 0.5);
       }
@@ -2368,6 +2712,35 @@
       }
       .tools-popup-tool .tool-desc {
         color: rgba(255, 255, 255, 0.4);
+      }
+      .model-label {
+        color: rgba(255, 255, 255, 0.35);
+      }
+      .model-popup {
+        background: rgba(40, 40, 40, 0.98);
+        border-color: rgba(255, 255, 255, 0.1);
+      }
+      .model-popup-header {
+        border-bottom-color: rgba(255, 255, 255, 0.08);
+        color: rgba(255, 255, 255, 0.7);
+      }
+      .model-popup-close {
+        color: rgba(255, 255, 255, 0.4);
+      }
+      .model-popup-close:hover {
+        background: rgba(255, 255, 255, 0.1);
+      }
+      .model-option:hover {
+        background: rgba(255, 255, 255, 0.06);
+      }
+      .model-option.active {
+        background: rgba(204, 120, 92, 0.2);
+      }
+      .model-option-name {
+        color: rgba(255, 255, 255, 0.85);
+      }
+      .model-option-desc {
+        color: rgba(255, 255, 255, 0.45);
       }
       .attachment-pill {
         background: rgba(255, 255, 255, 0.08);
@@ -2497,13 +2870,20 @@
     <div class="sidebar-header">
       <span class="sidebar-title">Chats</span>
       <div class="sidebar-spacer"></div>
+      <button class="new-chat-btn" id="new-chat-btn" title="New chat">+</button>
+      <button class="settings-btn" id="sidebar-new-window-btn" title="New window">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+          <polyline points="15 3 21 3 21 9"></polyline>
+          <line x1="10" y1="14" x2="21" y2="3"></line>
+        </svg>
+      </button>
       <button class="settings-btn" id="settings-btn" title="Settings">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="3"></circle>
           <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
         </svg>
       </button>
-      <button class="new-chat-btn" id="new-chat-btn" title="New chat">+</button>
     </div>
     <div class="sidebar-content" id="sidebar-content">
       <div class="conv-loading">Loading...</div>
@@ -2526,7 +2906,10 @@
       <div class="home-logo">✦</div>
       <div class="home-input-area">
         <div class="home-input-wrapper">
-          <textarea id="home-input" class="home-input" placeholder="Message Claude..." rows="1"></textarea>
+          <textarea id="home-input" class="home-input" placeholder="Message Claude... (@ for files, / for commands)" rows="1"></textarea>
+          <div class="autocomplete-popup" id="home-autocomplete-popup" style="display: none;">
+            <div class="autocomplete-list" id="home-autocomplete-list"></div>
+          </div>
           <div class="home-input-footer">
             <div class="model-selector">
               <button class="model-option active" data-model="claude-opus-4-5-20251101">Opus</button>
@@ -2564,15 +2947,18 @@
       <div id="tabs-container"></div>
       <button class="new-tab-btn" id="new-tab-btn" title="New tab">+</button>
       <button class="new-tab-btn" id="new-window-btn" title="New window">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-          <line x1="9" y1="3" x2="9" y2="21"></line>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+          <polyline points="15 3 21 3 21 9"></polyline>
+          <line x1="10" y1="14" x2="21" y2="3"></line>
         </svg>
       </button>
-      <div class="tab-bar-actions">
-        <span class="model-badge">Opus 4.5</span>
-        <button class="sign-out-btn" id="chat-logout-btn">Sign Out</button>
-      </div>
+      <button class="new-tab-btn" id="tab-bar-settings-btn" title="Settings">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+        </svg>
+      </button>
     </div>
 
     <!-- Messages -->
@@ -2609,8 +2995,56 @@
             </div>
           </div>
         </div>
-        <textarea id="input" placeholder="Message Claude..." rows="1"></textarea>
-        <button class="send-btn" id="send-btn">↑</button>
+        <div class="model-btn-container">
+          <button class="attach-btn model-btn" id="model-btn" title="Select Model">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="11" width="18" height="10" rx="2"></rect>
+              <circle cx="12" cy="5" r="2"></circle>
+              <path d="M12 7v4"></path>
+              <line x1="8" y1="16" x2="8" y2="16"></line>
+              <line x1="16" y1="16" x2="16" y2="16"></line>
+            </svg>
+          </button>
+          <div class="model-popup" id="model-popup" style="display: none;">
+            <div class="model-popup-header">
+              <span>Select Model</span>
+              <button class="model-popup-close" id="model-popup-close">×</button>
+            </div>
+            <div class="model-popup-content" id="model-popup-content">
+              <div class="model-option active" data-model="claude-sonnet-4-20250514">
+                <span class="model-option-name">Claude Sonnet 4</span>
+                <span class="model-option-desc">Fast & intelligent</span>
+              </div>
+              <div class="model-option" data-model="claude-opus-4-5-20251101">
+                <span class="model-option-name">Claude Opus 4.5</span>
+                <span class="model-option-desc">Most capable</span>
+              </div>
+              <div class="model-option" data-model="claude-sonnet-4-5-20250929">
+                <span class="model-option-name">Claude Sonnet 4.5</span>
+                <span class="model-option-desc">Extended thinking</span>
+              </div>
+              <div class="model-option" data-model="claude-haiku-4-5-20251001">
+                <span class="model-option-name">Claude Haiku 4.5</span>
+                <span class="model-option-desc">Fast & efficient</span>
+              </div>
+              <div class="model-option" data-model="claude-3-5-haiku-20241022">
+                <span class="model-option-name">Claude Haiku 3.5</span>
+                <span class="model-option-desc">Fastest responses</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <textarea id="input" placeholder="Message Claude... (@ for files, / for commands)" rows="1"></textarea>
+        <div class="autocomplete-popup" id="chat-autocomplete-popup" style="display: none;">
+          <div class="autocomplete-list" id="chat-autocomplete-list"></div>
+        </div>
+        <span class="model-label" id="model-label">Sonnet 4</span>
+        <button class="send-btn" id="send-btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="19" x2="12" y2="5"></line>
+            <polyline points="5 12 12 5 19 12"></polyline>
+          </svg>
+        </button>
         <button class="stop-btn" id="stop-btn">■</button>
       </div>
       <div class="attachment-container" id="attachment-container">

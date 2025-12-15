@@ -468,9 +468,121 @@ serversList?.addEventListener('change', (e) => {
   }
 });
 
+// Tab switching
+function initializeTabs() {
+  const tabs = document.querySelectorAll('.settings-tab');
+  const panels = document.querySelectorAll('.settings-panel');
+
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      const targetId = (tab as HTMLElement).dataset.tab;
+      if (!targetId) return;
+
+      // Update active tab
+      tabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+
+      // Update active panel
+      panels.forEach(p => p.classList.remove('active'));
+      const targetPanel = document.getElementById(`panel-${targetId}`);
+      if (targetPanel) {
+        targetPanel.classList.add('active');
+      }
+    });
+  });
+}
+
+// Font picker functionality
+function initializeFontPickers() {
+  const fontPickers = document.querySelectorAll('.font-picker');
+
+  fontPickers.forEach(picker => {
+    const search = picker.querySelector('.font-search') as HTMLInputElement;
+    const dropdown = picker.querySelector('.font-dropdown') as HTMLElement;
+    const options = picker.querySelectorAll('.font-option');
+
+    if (!search || !dropdown) return;
+
+    // Show dropdown on focus
+    search.addEventListener('focus', () => {
+      picker.classList.add('open');
+    });
+
+    // Filter options on input
+    search.addEventListener('input', () => {
+      const query = search.value.toLowerCase();
+      options.forEach(opt => {
+        const text = opt.textContent?.toLowerCase() || '';
+        (opt as HTMLElement).classList.toggle('hidden', !text.includes(query));
+      });
+
+      // Show/hide group labels based on visible options
+      const groups = dropdown.querySelectorAll('.font-group');
+      groups.forEach(group => {
+        const visibleOptions = group.querySelectorAll('.font-option:not(.hidden)');
+        (group as HTMLElement).style.display = visibleOptions.length > 0 ? 'block' : 'none';
+      });
+    });
+
+    // Select option on click
+    options.forEach(opt => {
+      opt.addEventListener('click', () => {
+        const fontName = opt.textContent || '';
+        const fontFamily = (opt as HTMLElement).dataset.family || '';
+        search.value = fontName;
+        options.forEach(o => o.classList.remove('selected'));
+        opt.classList.add('selected');
+        picker.classList.remove('open');
+
+        // Preview the font
+        (opt as HTMLElement).style.fontFamily = fontFamily;
+      });
+    });
+
+    // Close dropdown on click outside
+    document.addEventListener('click', (e) => {
+      if (!picker.contains(e.target as Node)) {
+        picker.classList.remove('open');
+      }
+    });
+
+    // Set initial value to first option
+    const firstOption = options[0];
+    if (firstOption) {
+      search.value = firstOption.textContent || 'System Default';
+      firstOption.classList.add('selected');
+    }
+  });
+}
+
+// Slider functionality
+function initializeSliders() {
+  const transparencySlider = document.getElementById('transparency') as HTMLInputElement;
+  const transparencyValue = document.getElementById('transparency-value') as HTMLElement;
+
+  if (transparencySlider && transparencyValue) {
+    transparencySlider.addEventListener('input', () => {
+      transparencyValue.textContent = `${transparencySlider.value}%`;
+    });
+  }
+}
+
+// Sign out handler
+const signOutBtn = document.getElementById('sign-out-btn');
+signOutBtn?.addEventListener('click', async () => {
+  if (confirm('Are you sure you want to sign out?')) {
+    await claude.logout();
+    // Close settings window and reload main window
+    window.close();
+  }
+});
+
 // Load settings on page load
 window.addEventListener('load', () => {
   loadSettings();
   loadMCPServers();
   initializeKeybindInputs();
+  initializeTabs();
+  initializeFontPickers();
+  initializeSliders();
 });

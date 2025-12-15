@@ -1,4 +1,5 @@
-import { marked } from 'marked';
+import { marked, Renderer } from 'marked';
+import hljs from 'highlight.js';
 
 export interface Citation {
   url?: string;
@@ -7,10 +8,30 @@ export interface Citation {
   end_index?: number;
 }
 
-// Configure marked
+// Create custom renderer with syntax highlighting
+const renderer = new Renderer();
+
+renderer.code = ({ text, lang }: { text: string; lang?: string }) => {
+  const language = lang && hljs.getLanguage(lang) ? lang : 'plaintext';
+  let highlighted: string;
+
+  try {
+    highlighted = hljs.highlight(text, { language }).value;
+  } catch {
+    highlighted = hljs.highlightAuto(text).value;
+  }
+
+  const langLabel = lang ? `<span class="code-lang">${lang}</span>` : '';
+  const copyBtn = `<button class="code-copy-btn" onclick="navigator.clipboard.writeText(this.parentElement.querySelector('code').textContent);this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>`;
+
+  return `<div class="code-block-wrapper"><div class="code-block-header">${langLabel}${copyBtn}</div><pre><code class="hljs language-${language}">${highlighted}</code></pre></div>`;
+};
+
+// Configure marked with custom renderer
 marked.setOptions({
   breaks: true,
   gfm: true,
+  renderer,
 });
 
 export function parseMarkdown(t: string, citations?: Citation[]): string {

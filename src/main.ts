@@ -211,10 +211,11 @@ function registerKeyboardShortcuts() {
   const newConvKey = shortcuts.newConversation || DEFAULT_KEYBOARD_SHORTCUTS.newConversation;
   try {
     globalShortcut.register(newConvKey, () => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('new-conversation');
-        mainWindow.show();
-        mainWindow.focus();
+      const win = mainWindows.find(w => !w.isDestroyed()) || mainWindows[0];
+      if (win && !win.isDestroyed()) {
+        win.webContents.send('new-conversation');
+        win.show();
+        win.focus();
       }
     });
   } catch (e) {
@@ -225,10 +226,11 @@ function registerKeyboardShortcuts() {
   const sidebarKey = shortcuts.toggleSidebar || DEFAULT_KEYBOARD_SHORTCUTS.toggleSidebar;
   try {
     globalShortcut.register(sidebarKey, () => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('toggle-sidebar');
-        mainWindow.show();
-        mainWindow.focus();
+      const win = mainWindows.find(w => !w.isDestroyed()) || mainWindows[0];
+      if (win && !win.isDestroyed()) {
+        win.webContents.send('toggle-sidebar');
+        win.show();
+        win.focus();
       }
     });
   } catch (e) {
@@ -343,10 +345,11 @@ function createSettingsWindow() {
   const isMac = process.platform === 'darwin';
 
   settingsWindow = new BrowserWindow({
-    width: 480,
-    height: 520,
-    minWidth: 400,
-    minHeight: 400,
+    width: 900,
+    height: 720,
+    minWidth: 750,
+    minHeight: 600,
+    center: true,
     ...(isMac ? {
       transparent: true,
       vibrancy: 'under-window',
