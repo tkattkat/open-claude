@@ -21,6 +21,7 @@ declare global {
       openSettings: () => Promise<void>;
       getSettings: () => Promise<{ spotlightKeybind?: string; spotlightPersistHistory?: boolean }>;
       saveSettings: (settings: { spotlightKeybind?: string; spotlightPersistHistory?: boolean }) => Promise<{ spotlightKeybind?: string; spotlightPersistHistory?: boolean }>;
+      newWindow: () => Promise<{ windowId: number }>;
       onMessageThinking: (callback: (data: ThinkingData) => void) => void;
       onMessageThinkingStream: (callback: (data: ThinkingStreamData) => void) => void;
       onMessageToolUse: (callback: (data: ToolUseData) => void) => void;
@@ -1698,20 +1699,63 @@ function setupEventListeners() {
   // Login button
   $('login-btn')?.addEventListener('click', login);
 
-  // Logout buttons (home and chat views)
-  $('logout-btn')?.addEventListener('click', logout);
-  $('chat-logout-btn')?.addEventListener('click', logout);
-
   // New chat button
   $('new-chat-btn')?.addEventListener('click', newChat);
 
-  // Settings button
-  $('settings-btn')?.addEventListener('click', () => {
+  // Chat header menu
+  const menuBtn = $('menu-btn');
+  const menuDropdown = $('menu-dropdown');
+
+  menuBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    menuDropdown?.classList.toggle('visible');
+  });
+
+  // Menu items
+  $('menu-new-window')?.addEventListener('click', () => {
+    menuDropdown?.classList.remove('visible');
+    window.claude.newWindow();
+  });
+
+  $('menu-export')?.addEventListener('click', () => {
+    menuDropdown?.classList.remove('visible');
+    exportConversation();
+  });
+
+  $('menu-signout')?.addEventListener('click', () => {
+    menuDropdown?.classList.remove('visible');
+    logout();
+  });
+
+  // Home page menu
+  const homeMenuBtn = $('home-menu-btn');
+  const homeMenuDropdown = $('home-menu-dropdown');
+
+  homeMenuBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    homeMenuDropdown?.classList.toggle('visible');
+  });
+
+  $('home-menu-new-window')?.addEventListener('click', () => {
+    homeMenuDropdown?.classList.remove('visible');
+    window.claude.newWindow();
+  });
+
+  $('home-menu-settings')?.addEventListener('click', () => {
+    homeMenuDropdown?.classList.remove('visible');
     window.claude.openSettings();
   });
 
-  // Export button
-  $('export-btn')?.addEventListener('click', exportConversation);
+  $('home-menu-signout')?.addEventListener('click', () => {
+    homeMenuDropdown?.classList.remove('visible');
+    logout();
+  });
+
+  // Close all menus when clicking outside
+  document.addEventListener('click', () => {
+    menuDropdown?.classList.remove('visible');
+    homeMenuDropdown?.classList.remove('visible');
+  });
 
   // Sidebar toggle
   $('sidebar-tab')?.addEventListener('click', toggleSidebar);

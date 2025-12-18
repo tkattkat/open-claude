@@ -2,6 +2,7 @@
 export interface SettingsSchema {
   spotlightKeybind: string;
   spotlightPersistHistory: boolean;
+  newWindowKeybind: string;
 }
 
 // Store schema for electron-store

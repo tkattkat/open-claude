@@ -252,6 +252,14 @@
       -webkit-app-region: no-drag;
     }
 
+    .home-header {
+      position: absolute;
+      top: 12px;
+      right: 16px;
+      z-index: 100;
+      -webkit-app-region: no-drag;
+    }
+
     .home-signout {
       font-size: 12px;
       color: rgba(0, 0, 0, 0.4);
@@ -426,6 +434,95 @@
     .sign-out-btn:hover {
       background: rgba(0, 0, 0, 0.06);
       color: rgba(0, 0, 0, 0.7);
+    }
+
+    /* Hamburger menu */
+    .menu-container {
+      position: relative;
+    }
+
+    .menu-btn {
+      width: 28px;
+      height: 28px;
+      background: transparent;
+      border: none;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: rgba(0, 0, 0, 0.5);
+      transition: all 0.15s;
+    }
+
+    .menu-btn:hover {
+      background: rgba(0, 0, 0, 0.06);
+      color: rgba(0, 0, 0, 0.7);
+    }
+
+    .menu-dropdown {
+      position: absolute;
+      top: calc(100% + 6px);
+      right: 0;
+      min-width: 160px;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-radius: 10px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.08);
+      padding: 6px;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(-8px);
+      transition: all 0.15s ease;
+      z-index: 1000;
+    }
+
+    .menu-dropdown.visible {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0);
+    }
+
+    .menu-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 8px 12px;
+      background: transparent;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      color: rgba(0, 0, 0, 0.8);
+      cursor: pointer;
+      transition: background 0.1s;
+      text-align: left;
+    }
+
+    .menu-item:hover {
+      background: rgba(0, 0, 0, 0.06);
+    }
+
+    .menu-item svg {
+      width: 16px;
+      height: 16px;
+      color: rgba(0, 0, 0, 0.5);
+      flex-shrink: 0;
+    }
+
+    .menu-divider {
+      height: 1px;
+      background: rgba(0, 0, 0, 0.08);
+      margin: 6px 0;
+    }
+
+    .menu-item.danger {
+      color: #e45649;
+    }
+
+    .menu-item.danger svg {
+      color: #e45649;
     }
 
     /* Sidebar overlay */
@@ -1770,6 +1867,35 @@
         background: rgba(255, 255, 255, 0.1);
         color: rgba(255, 255, 255, 0.8);
       }
+      .menu-btn {
+        color: rgba(255, 255, 255, 0.5);
+      }
+      .menu-btn:hover {
+        background: rgba(255, 255, 255, 0.1);
+        color: rgba(255, 255, 255, 0.8);
+      }
+      .menu-dropdown {
+        background: rgba(40, 40, 42, 0.95);
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1);
+      }
+      .menu-item {
+        color: rgba(255, 255, 255, 0.85);
+      }
+      .menu-item:hover {
+        background: rgba(255, 255, 255, 0.1);
+      }
+      .menu-item svg {
+        color: rgba(255, 255, 255, 0.5);
+      }
+      .menu-divider {
+        background: rgba(255, 255, 255, 0.1);
+      }
+      .menu-item.danger {
+        color: #e06c75;
+      }
+      .menu-item.danger svg {
+        color: #e06c75;
+      }
 
       .sidebar {
         background: rgba(28, 28, 30, 0.97);
@@ -1983,12 +2109,6 @@
     <div class="sidebar-header">
       <span class="sidebar-title">Chats</span>
       <div class="sidebar-spacer"></div>
-      <button class="settings-btn" id="settings-btn" title="Settings">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="3"></circle>
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-        </svg>
-      </button>
       <button class="new-chat-btn" id="new-chat-btn" title="New chat">+</button>
     </div>
     <div class="sidebar-content" id="sidebar-content">
@@ -2000,6 +2120,43 @@
   <div id="home" class="home-container">
     <!-- Draggable area for window movement -->
     <div class="home-drag-region"></div>
+    <!-- Home header with menu -->
+    <div class="home-header">
+      <div class="menu-container">
+        <button class="menu-btn" id="home-menu-btn" title="Menu">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <circle cx="12" cy="5" r="2"></circle>
+            <circle cx="12" cy="12" r="2"></circle>
+            <circle cx="12" cy="19" r="2"></circle>
+          </svg>
+        </button>
+        <div class="menu-dropdown" id="home-menu-dropdown">
+          <button class="menu-item" id="home-menu-new-window">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M21 8v13H8"></path>
+            </svg>
+            New Window
+          </button>
+          <button class="menu-item" id="home-menu-settings">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+            Settings
+          </button>
+          <div class="menu-divider"></div>
+          <button class="menu-item danger" id="home-menu-signout">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+              <polyline points="16 17 21 12 16 7"></polyline>
+              <line x1="21" y1="12" x2="9" y2="12"></line>
+            </svg>
+            Sign Out
+          </button>
+        </div>
+      </div>
+    </div>
     <div class="home-content">
       <div class="home-logo">✦</div>
       <div class="home-input-area">
@@ -2025,9 +2182,6 @@
         </div>
       </div>
     </div>
-    <div class="home-footer">
-      <button class="home-signout" id="logout-btn">Sign Out</button>
-    </div>
   </div>
 
   <div id="chat" class="chat-container">
@@ -2037,15 +2191,42 @@
         <!-- Icons removed - using sidebar tab instead -->
       </div>
       <div class="header-right">
-        <button class="icon-btn" id="export-btn" title="Export to Markdown">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-            <polyline points="7 10 12 15 17 10"></polyline>
-            <line x1="12" y1="15" x2="12" y2="3"></line>
-          </svg>
-        </button>
         <span class="model-badge">Opus 4.5</span>
-        <button class="sign-out-btn" id="chat-logout-btn">Sign Out</button>
+        <div class="menu-container">
+          <button class="menu-btn" id="menu-btn" title="Menu">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <circle cx="12" cy="5" r="2"></circle>
+              <circle cx="12" cy="12" r="2"></circle>
+              <circle cx="12" cy="19" r="2"></circle>
+            </svg>
+          </button>
+          <div class="menu-dropdown" id="menu-dropdown">
+            <button class="menu-item" id="menu-new-window">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M21 8v13H8"></path>
+              </svg>
+              New Window
+            </button>
+            <button class="menu-item" id="menu-export">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+              Export Markdown
+            </button>
+            <div class="menu-divider"></div>
+            <button class="menu-item danger" id="menu-signout">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                <polyline points="16 17 21 12 16 7"></polyline>
+                <line x1="21" y1="12" x2="9" y2="12"></line>
+              </svg>
+              Sign Out
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 

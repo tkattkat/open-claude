@@ -5,16 +5,31 @@ const claude = (window as any).claude;
 interface Settings {
   spotlightKeybind: string;
   spotlightPersistHistory: boolean;
+  newWindowKeybind: string;
 }
 
 // DOM Elements
 const keybindInput = document.getElementById('keybind-input') as HTMLElement;
 const keybindDisplay = document.getElementById('keybind-display') as HTMLElement;
+const newWindowKeybindInput = document.getElementById('new-window-keybind-input') as HTMLElement;
+const newWindowKeybindDisplay = document.getElementById('new-window-keybind-display') as HTMLElement;
 const persistHistoryCheckbox = document.getElementById('persist-history') as HTMLInputElement;
 
-let isRecordingKeybind = false;
 let currentSettings: Settings | null = null;
-let pendingKeybind: string | null = null;
+
+// Keybind recording state
+interface KeybindRecorder {
+  input: HTMLElement;
+  display: HTMLElement;
+  settingKey: 'spotlightKeybind' | 'newWindowKeybind';
+  isRecording: boolean;
+  pendingKeybind: string | null;
+}
+
+const keybindRecorders: KeybindRecorder[] = [
+  { input: keybindInput, display: keybindDisplay, settingKey: 'spotlightKeybind', isRecording: false, pendingKeybind: null },
+  { input: newWindowKeybindInput, display: newWindowKeybindDisplay, settingKey: 'newWindowKeybind', isRecording: false, pendingKeybind: null },
+];
 
 // Detect if we're on macOS
 const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
@@ -105,16 +120,16 @@ async function loadSettings() {
 
   if (currentSettings) {
     keybindDisplay.textContent = formatKeybind(currentSettings.spotlightKeybind);
+    newWindowKeybindDisplay.textContent = formatKeybind(currentSettings.newWindowKeybind);
     persistHistoryCheckbox.checked = currentSettings.spotlightPersistHistory;
   }
 }
 
-// Save keybind
-async function saveKeybind(keybind: string) {
+// Save keybind for a specific setting
+async function saveKeybind(settingKey: 'spotlightKeybind' | 'newWindowKeybind', keybind: string) {
   if (!currentSettings) return;
 
-  currentSettings = await claude.saveSettings({ spotlightKeybind: keybind });
-  keybindDisplay.textContent = formatKeybind(keybind);
+  currentSettings = await claude.saveSettings({ [settingKey]: keybind });
 }
 
 // Save persist history
@@ -125,66 +140,76 @@ async function savePersistHistory(value: boolean) {
 }
 
 // Stop recording and save if we have a valid keybind
-function stopRecording(save: boolean) {
-  if (!isRecordingKeybind) return;
+function stopRecording(recorder: KeybindRecorder, save: boolean) {
+  if (!recorder.isRecording) return;
 
-  isRecordingKeybind = false;
-  keybindInput.classList.remove('recording');
+  recorder.isRecording = false;
+  recorder.input.classList.remove('recording');
 
-  if (save && pendingKeybind) {
-    saveKeybind(pendingKeybind);
+  if (save && recorder.pendingKeybind) {
+    saveKeybind(recorder.settingKey, recorder.pendingKeybind);
+    recorder.display.textContent = formatKeybind(recorder.pendingKeybind);
   } else if (currentSettings) {
-    keybindDisplay.textContent = formatKeybind(currentSettings.spotlightKeybind);
+    recorder.display.textContent = formatKeybind(currentSettings[recorder.settingKey]);
   }
 
-  pendingKeybind = null;
+  recorder.pendingKeybind = null;
 }
 
-// Keybind recording
-keybindInput.addEventListener('click', () => {
-  if (!isRecordingKeybind) {
-    isRecordingKeybind = true;
-    pendingKeybind = null;
-    keybindInput.classList.add('recording');
-    keybindDisplay.textContent = 'Press keys...';
-    keybindInput.focus();
-  }
-});
+// Set up keybind recording for each recorder
+keybindRecorders.forEach(recorder => {
+  recorder.input.addEventListener('click', () => {
+    if (!recorder.isRecording) {
+      // Stop any other recorders
+      keybindRecorders.forEach(r => {
+        if (r !== recorder && r.isRecording) {
+          stopRecording(r, false);
+        }
+      });
 
-keybindInput.addEventListener('keydown', (e) => {
-  if (!isRecordingKeybind) return;
-
-  e.preventDefault();
-  e.stopPropagation();
-
-  // Handle Escape to cancel
-  if (e.key === 'Escape') {
-    stopRecording(false);
-    return;
-  }
-
-  // Handle Enter to confirm
-  if (e.key === 'Enter' && pendingKeybind) {
-    stopRecording(true);
-    return;
-  }
-
-  const result = keyEventToAccelerator(e);
-
-  // Update display to show current keys being pressed
-  if (result.accelerator) {
-    keybindDisplay.textContent = formatKeybind(result.accelerator);
-
-    // If we have a complete combo (modifier + key), store it as pending
-    if (result.isComplete) {
-      pendingKeybind = result.accelerator;
+      recorder.isRecording = true;
+      recorder.pendingKeybind = null;
+      recorder.input.classList.add('recording');
+      recorder.display.textContent = 'Press keys...';
+      recorder.input.focus();
     }
-  }
-});
+  });
 
-keybindInput.addEventListener('blur', () => {
-  // Save pending keybind on blur (clicking away)
-  stopRecording(!!pendingKeybind);
+  recorder.input.addEventListener('keydown', (e) => {
+    if (!recorder.isRecording) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Handle Escape to cancel
+    if (e.key === 'Escape') {
+      stopRecording(recorder, false);
+      return;
+    }
+
+    // Handle Enter to confirm
+    if (e.key === 'Enter' && recorder.pendingKeybind) {
+      stopRecording(recorder, true);
+      return;
+    }
+
+    const result = keyEventToAccelerator(e);
+
+    // Update display to show current keys being pressed
+    if (result.accelerator) {
+      recorder.display.textContent = formatKeybind(result.accelerator);
+
+      // If we have a complete combo (modifier + key), store it as pending
+      if (result.isComplete) {
+        recorder.pendingKeybind = result.accelerator;
+      }
+    }
+  });
+
+  recorder.input.addEventListener('blur', () => {
+    // Save pending keybind on blur (clicking away)
+    stopRecording(recorder, !!recorder.pendingKeybind);
+  });
 });
 
 // Persist history toggle

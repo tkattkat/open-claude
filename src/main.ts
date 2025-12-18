@@ -6,7 +6,8 @@ import { isAuthenticated, getOrgId, makeRequest, streamCompletion, stopResponse,
 import { createStreamState, processSSEChunk, type StreamCallbacks } from './streaming/parser';
 import type { SettingsSchema, AttachmentPayload, UploadFilePayload } from './types';
 
-let mainWindow: BrowserWindow | null = null;
+// Track multiple main windows
+const mainWindows: Map<number, BrowserWindow> = new Map();
 let spotlightWindow: BrowserWindow | null = null;
 let settingsWindow: BrowserWindow | null = null;
 
@@ -14,6 +15,7 @@ let settingsWindow: BrowserWindow | null = null;
 const DEFAULT_SETTINGS: SettingsSchema = {
   spotlightKeybind: 'CommandOrControl+Shift+C',
   spotlightPersistHistory: true,
+  newWindowKeybind: 'CommandOrControl+Shift+N',
 };
 
 // Get settings with defaults
@@ -28,23 +30,41 @@ function saveSettings(settings: Partial<SettingsSchema>) {
   store.set('settings', { ...current, ...settings });
 }
 
-// Register spotlight shortcut
-function registerSpotlightShortcut() {
+// Register global shortcuts
+function registerShortcuts() {
   globalShortcut.unregisterAll();
   const settings = getSettings();
-  const keybind = settings.spotlightKeybind || DEFAULT_SETTINGS.spotlightKeybind;
 
+  // Spotlight shortcut
+  const spotlightKeybind = settings.spotlightKeybind || DEFAULT_SETTINGS.spotlightKeybind;
   try {
-    globalShortcut.register(keybind, () => {
+    globalShortcut.register(spotlightKeybind, () => {
       createSpotlightWindow();
     });
   } catch (e) {
-    // Fallback to default if custom keybind fails
-    console.error('Failed to register keybind:', keybind, e);
+    console.error('Failed to register spotlight keybind:', spotlightKeybind, e);
     globalShortcut.register(DEFAULT_SETTINGS.spotlightKeybind, () => {
       createSpotlightWindow();
     });
   }
+
+  // New window shortcut
+  const newWindowKeybind = settings.newWindowKeybind || DEFAULT_SETTINGS.newWindowKeybind;
+  try {
+    globalShortcut.register(newWindowKeybind, () => {
+      createMainWindow();
+    });
+  } catch (e) {
+    console.error('Failed to register new window keybind:', newWindowKeybind, e);
+    globalShortcut.register(DEFAULT_SETTINGS.newWindowKeybind, () => {
+      createMainWindow();
+    });
+  }
+}
+
+// Backwards compatibility alias
+function registerSpotlightShortcut() {
+  registerShortcuts();
 }
 
 // Create spotlight search window
@@ -101,10 +121,10 @@ function createSpotlightWindow() {
   });
 }
 
-function createMainWindow() {
+function createMainWindow(): BrowserWindow {
   const isMac = process.platform === 'darwin';
 
-  mainWindow = new BrowserWindow({
+  const newWindow = new BrowserWindow({
     width: 900,
     height: 700,
     ...(isMac ? {
@@ -124,7 +144,22 @@ function createMainWindow() {
     },
   });
 
-  mainWindow.loadFile(path.join(__dirname, '../static/index.html'));
+  const windowId = newWindow.id;
+  mainWindows.set(windowId, newWindow);
+
+  newWindow.loadFile(path.join(__dirname, '../static/index.html'));
+
+  newWindow.on('closed', () => {
+    mainWindows.delete(windowId);
+  });
+
+  return newWindow;
+}
+
+// Get the first main window (for backwards compatibility)
+function getMainWindow(): BrowserWindow | null {
+  const windows = Array.from(mainWindows.values());
+  return windows.length > 0 ? windows[0] : null;
 }
 
 // Create settings window
@@ -446,8 +481,11 @@ ipcMain.handle('star-conversation', async (_event, convId: string, isStarred: bo
 });
 
 // Export conversation to Markdown
-ipcMain.handle('export-conversation-markdown', async (_event, conversationData: { title: string; messages: Array<{ role: string; content: string; timestamp?: string }> }) => {
+ipcMain.handle('export-conversation-markdown', async (event, conversationData: { title: string; messages: Array<{ role: string; content: string; timestamp?: string }> }) => {
   const { title, messages } = conversationData;
+
+  // Get the window that sent this request
+  const senderWindow = BrowserWindow.fromWebContents(event.sender);
 
   // Build markdown content
   let markdown = `# ${title || 'Conversation'}\n\n`;
@@ -461,7 +499,7 @@ ipcMain.handle('export-conversation-markdown', async (_event, conversationData: 
   }
 
   // Show save dialog
-  const result = await dialog.showSaveDialog(mainWindow!, {
+  const result = await dialog.showSaveDialog(senderWindow || getMainWindow()!, {
     title: 'Export Conversation',
     defaultPath: `${title || 'conversation'}.md`,
     filters: [
@@ -484,6 +522,12 @@ ipcMain.handle('export-conversation-markdown', async (_event, conversationData: 
   }
 });
 
+// Create a new window
+ipcMain.handle('new-window', async () => {
+  const newWindow = createMainWindow();
+  return { windowId: newWindow.id };
+});
+
 // Upload file attachments (prepare metadata only)
 ipcMain.handle('upload-attachments', async (_event, files: UploadFilePayload[]) => {
   const uploads: AttachmentPayload[] = [];
@@ -496,9 +540,12 @@ ipcMain.handle('upload-attachments', async (_event, files: UploadFilePayload[]) 
 });
 
 // Send a message and stream response
-ipcMain.handle('send-message', async (_event, conversationId: string, message: string, parentMessageUuid: string, attachments: AttachmentPayload[] = []) => {
+ipcMain.handle('send-message', async (event, conversationId: string, message: string, parentMessageUuid: string, attachments: AttachmentPayload[] = []) => {
   const orgId = await getOrgId();
   if (!orgId) throw new Error('Not authenticated');
+
+  // Get the window that sent this message
+  const senderWindow = BrowserWindow.fromWebContents(event.sender);
 
   console.log('[API] Sending message to conversation:', conversationId);
   console.log('[API] Parent message UUID:', parentMessageUuid);
@@ -512,14 +559,14 @@ ipcMain.handle('send-message', async (_event, conversationId: string, message: s
 
   const callbacks: StreamCallbacks = {
     onTextDelta: (text, fullText, blockIndex) => {
-      mainWindow?.webContents.send('message-stream', { conversationId, blockIndex, text, fullText });
+      senderWindow?.webContents.send('message-stream', { conversationId, blockIndex, text, fullText });
     },
     onThinkingStart: (blockIndex) => {
-      mainWindow?.webContents.send('message-thinking', { conversationId, blockIndex, isThinking: true });
+      senderWindow?.webContents.send('message-thinking', { conversationId, blockIndex, isThinking: true });
     },
     onThinkingDelta: (thinking, blockIndex) => {
       const block = state.contentBlocks.get(blockIndex);
-      mainWindow?.webContents.send('message-thinking-stream', {
+      senderWindow?.webContents.send('message-thinking-stream', {
         conversationId,
         blockIndex,
         thinking,
@@ -527,7 +574,7 @@ ipcMain.handle('send-message', async (_event, conversationId: string, message: s
       });
     },
     onThinkingStop: (thinkingText, summaries, blockIndex) => {
-      mainWindow?.webContents.send('message-thinking', {
+      senderWindow?.webContents.send('message-thinking', {
         conversationId,
         blockIndex,
         isThinking: false,
@@ -536,7 +583,7 @@ ipcMain.handle('send-message', async (_event, conversationId: string, message: s
       });
     },
     onToolStart: (toolName, toolMessage, blockIndex) => {
-      mainWindow?.webContents.send('message-tool-use', {
+      senderWindow?.webContents.send('message-tool-use', {
         conversationId,
         blockIndex,
         toolName,
@@ -546,7 +593,7 @@ ipcMain.handle('send-message', async (_event, conversationId: string, message: s
     },
     onToolStop: (toolName, input, blockIndex) => {
       const block = state.contentBlocks.get(blockIndex);
-      mainWindow?.webContents.send('message-tool-use', {
+      senderWindow?.webContents.send('message-tool-use', {
         conversationId,
         blockIndex,
         toolName,
@@ -556,7 +603,7 @@ ipcMain.handle('send-message', async (_event, conversationId: string, message: s
       });
     },
     onToolResult: (toolName, result, isError, blockIndex) => {
-      mainWindow?.webContents.send('message-tool-result', {
+      senderWindow?.webContents.send('message-tool-result', {
         conversationId,
         blockIndex,
         toolName,
@@ -565,16 +612,16 @@ ipcMain.handle('send-message', async (_event, conversationId: string, message: s
       });
     },
     onCitation: (citation, blockIndex) => {
-      mainWindow?.webContents.send('message-citation', { conversationId, blockIndex, citation });
+      senderWindow?.webContents.send('message-citation', { conversationId, blockIndex, citation });
     },
     onToolApproval: (toolName, approvalKey, input) => {
-      mainWindow?.webContents.send('message-tool-approval', { conversationId, toolName, approvalKey, input });
+      senderWindow?.webContents.send('message-tool-approval', { conversationId, toolName, approvalKey, input });
     },
     onCompaction: (status, compactionMessage) => {
-      mainWindow?.webContents.send('message-compaction', { conversationId, status, message: compactionMessage });
+      senderWindow?.webContents.send('message-compaction', { conversationId, status, message: compactionMessage });
     },
     onComplete: (fullText, steps, messageUuid) => {
-      mainWindow?.webContents.send('message-complete', { conversationId, fullText, steps, messageUuid });
+      senderWindow?.webContents.send('message-complete', { conversationId, fullText, steps, messageUuid });
     }
   };
 
@@ -619,9 +666,9 @@ ipcMain.handle('get-settings', async () => {
 
 ipcMain.handle('save-settings', async (_event, settings: Partial<SettingsSchema>) => {
   saveSettings(settings);
-  // Re-register shortcut if keybind changed
-  if (settings.spotlightKeybind !== undefined) {
-    registerSpotlightShortcut();
+  // Re-register shortcuts if any keybind changed
+  if (settings.spotlightKeybind !== undefined || settings.newWindowKeybind !== undefined) {
+    registerShortcuts();
   }
   return getSettings();
 });
@@ -632,6 +679,7 @@ if (!gotTheLock) {
   app.quit();
 } else {
   app.on('second-instance', () => {
+    const mainWindow = getMainWindow();
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.focus();
@@ -646,7 +694,7 @@ app.whenReady().then(() => {
   registerSpotlightShortcut();
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
+    if (mainWindows.size === 0) {
       createMainWindow();
     }
   });

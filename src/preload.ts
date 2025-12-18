@@ -116,6 +116,9 @@ contextBridge.exposeInMainWorld('claude', {
   // Settings functions
   openSettings: () => ipcRenderer.invoke('open-settings'),
   getSettings: () => ipcRenderer.invoke('get-settings'),
-  saveSettings: (settings: { spotlightKeybind?: string; spotlightPersistHistory?: boolean }) =>
+  saveSettings: (settings: { spotlightKeybind?: string; spotlightPersistHistory?: boolean; newWindowKeybind?: string }) =>
     ipcRenderer.invoke('save-settings', settings),
+
+  // Window management
+  newWindow: () => ipcRenderer.invoke('new-window'),
 });
