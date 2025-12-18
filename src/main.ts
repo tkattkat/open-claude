@@ -215,6 +215,7 @@ ipcMain.handle('spotlight-resize', async (_event, height: number) => {
 let spotlightConversationId: string | null = null;
 let spotlightParentMessageUuid: string | null = null;
 let spotlightMessages: Array<{ role: 'user' | 'assistant'; text: string }> = [];
+let spotlightDraftInput: string = '';
 
 // Spotlight send message (uses Haiku)
 ipcMain.handle('spotlight-send', async (_event, message: string) => {
@@ -299,11 +300,20 @@ ipcMain.handle('spotlight-reset', async () => {
 // Get spotlight conversation history from local state
 ipcMain.handle('spotlight-get-history', async () => {
   const settings = getSettings();
-  if (!settings.spotlightPersistHistory || spotlightMessages.length === 0) {
-    return { hasHistory: false, messages: [] };
+  if (!settings.spotlightPersistHistory) {
+    return { hasHistory: false, messages: [], draftInput: '' };
   }
 
-  return { hasHistory: true, messages: spotlightMessages };
+  return {
+    hasHistory: spotlightMessages.length > 0,
+    messages: spotlightMessages,
+    draftInput: spotlightDraftInput
+  };
+});
+
+// Save spotlight draft input
+ipcMain.handle('spotlight-save-draft', async (_event, draft: string) => {
+  spotlightDraftInput = draft;
 });
 
 // Force new spotlight conversation
@@ -311,6 +321,7 @@ ipcMain.handle('spotlight-new-chat', async () => {
   spotlightConversationId = null;
   spotlightParentMessageUuid = null;
   spotlightMessages = [];
+  spotlightDraftInput = '';
 });
 
 ipcMain.handle('get-auth-status', async () => {

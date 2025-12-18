@@ -107,6 +107,7 @@ contextBridge.exposeInMainWorld('claude', {
   spotlightReset: () => ipcRenderer.invoke('spotlight-reset'),
   spotlightGetHistory: () => ipcRenderer.invoke('spotlight-get-history'),
   spotlightNewChat: () => ipcRenderer.invoke('spotlight-new-chat'),
+  spotlightSaveDraft: (draft: string) => ipcRenderer.invoke('spotlight-save-draft', draft),
 
   // Search modal toggle (triggered by global Command+K shortcut)
   onToggleSearchModal: (callback: () => void) => {

@@ -95,7 +95,7 @@ function renderHistoryMessages(messages: Message[]) {
   updateWindowSize();
 }
 
-// Load history on startup
+// Load history and draft on startup
 async function loadHistory() {
   try {
     const result = await claude.spotlightGetHistory();
@@ -103,6 +103,11 @@ async function loadHistory() {
       hasHistory = true;
       renderHistoryMessages(result.messages);
       showNewChatButton(true);
+    }
+    // Restore draft input
+    if (result.draftInput) {
+      input.value = result.draftInput;
+      sendBtn.classList.toggle('visible', result.draftInput.length > 0);
     }
   } catch (e) {
     console.error('Failed to load spotlight history:', e);
@@ -119,6 +124,10 @@ async function startNewChat() {
     messagesArea.classList.remove('visible');
   }
   inputRow?.classList.remove('no-border');
+
+  // Clear input
+  input.value = '';
+  sendBtn.classList.remove('visible');
 
   hasHistory = false;
   showNewChatButton(false);
@@ -371,6 +380,8 @@ window.addEventListener('load', () => {
 
 // Clean up on close
 window.addEventListener('beforeunload', () => {
+  // Save draft input before closing
+  claude.spotlightSaveDraft(input.value);
   claude.removeSpotlightListeners();
   claude.spotlightReset();
 });
