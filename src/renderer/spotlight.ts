@@ -331,6 +331,38 @@ newChatBtn.addEventListener('click', () => {
   startNewChat();
 });
 
+// Handle code copy button clicks 
+document.addEventListener('click', async (e) => {
+  const target = e.target as HTMLElement;
+  const copyBtn = target.closest('.code-copy-btn') as HTMLButtonElement;
+  if (!copyBtn) return;
+
+  const code = copyBtn.dataset.code;
+  if (!code) return;
+
+  const textarea = document.createElement('textarea');
+  textarea.innerHTML = code;
+  const decodedCode = textarea.value;
+
+  try {
+    await navigator.clipboard.writeText(decodedCode);
+    copyBtn.classList.add('copied');
+
+    const originalSvg = copyBtn.innerHTML;
+    copyBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="20 6 9 17 4 12"></polyline>
+    </svg>`;
+
+    setTimeout(() => {
+      copyBtn.classList.remove('copied');
+      copyBtn.innerHTML = originalSvg;
+    }, 1500);
+  } catch (err) {
+    console.error('Failed to copy code:', err);
+  }
+});
+
+
 // Focus input on load and load history
 window.addEventListener('load', () => {
   input.focus();
