@@ -35,16 +35,16 @@ function registerShortcuts() {
   globalShortcut.unregisterAll();
   const settings = getSettings();
 
-  // Spotlight shortcut
+  // Spotlight shortcut (toggle)
   const spotlightKeybind = settings.spotlightKeybind || DEFAULT_SETTINGS.spotlightKeybind;
   try {
     globalShortcut.register(spotlightKeybind, () => {
-      createSpotlightWindow();
+      toggleSpotlightWindow();
     });
   } catch (e) {
     console.error('Failed to register spotlight keybind:', spotlightKeybind, e);
     globalShortcut.register(DEFAULT_SETTINGS.spotlightKeybind, () => {
-      createSpotlightWindow();
+      toggleSpotlightWindow();
     });
   }
 
@@ -65,6 +65,15 @@ function registerShortcuts() {
 // Backwards compatibility alias
 function registerSpotlightShortcut() {
   registerShortcuts();
+}
+
+// Toggle spotlight window (open if closed, close if open)
+function toggleSpotlightWindow() {
+  if (spotlightWindow && !spotlightWindow.isDestroyed()) {
+    spotlightWindow.close();
+    return;
+  }
+  createSpotlightWindow();
 }
 
 // Create spotlight search window
